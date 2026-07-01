@@ -6,6 +6,7 @@ import { ArrowLeft, MapPin, Wallet, MessageCircle, Lightbulb, Shuffle } from "lu
 import { motion } from "framer-motion";
 import ResultModal from "@/components/result-modal";
 import { Suggestion } from "@/types/planco";
+import { saveHistory } from "@/lib/history";
 
 const FALLBACK_SUGGESTIONS: Suggestion[] = [
   { id: "1", name: "カラオケ",      budget: "約1,500円", description: "みんなで盛り上がれる定番エンタメ",        reason: "人数が多くても楽しめる！" },
@@ -46,6 +47,15 @@ export default function SuggestionsPage() {
         onReSpin={() => {
           setSelected(null);
           router.push("/roulette");
+        }}
+        onDecide={() => {
+          if (!selected) return;
+          saveHistory({
+            type: "ai",
+            conditions: { location },
+            options: suggestions.map((s) => s.name),
+            selected_option: selected.name,
+          });
         }}
         reSpinLabel="ルーレットで決める"
       />

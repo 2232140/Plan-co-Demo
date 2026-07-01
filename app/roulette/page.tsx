@@ -6,6 +6,7 @@ import { ArrowLeft } from "lucide-react";
 import RouletteWheel from "@/components/roulette-wheel";
 import ResultModal from "@/components/result-modal";
 import { Suggestion } from "@/types/planco";
+import { saveHistory } from "@/lib/history";
 
 const FALLBACK_SUGGESTIONS: Suggestion[] = [
   { id: "1", name: "カラオケ",     budget: "約1,500円", description: "みんなで盛り上がれる定番エンタメ",        reason: "人数が多くても楽しめる！" },
@@ -56,6 +57,7 @@ export default function RoulettePage() {
   const [selectedSuggestion, setSelectedSuggestion] = useState<Suggestion | null>(null);
   const [showConfetti, setShowConfetti] = useState(false);
   const [activeTab, setActiveTab] = useState<"roulette" | "amida">("roulette");
+  const [isCustom, setIsCustom] = useState(false);
   const confettiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // sessionStorageからAIの提案データを読み込む
@@ -68,6 +70,7 @@ export default function RoulettePage() {
         if (Array.isArray(data) && data.length > 0) setSuggestions(data);
       }
       if (storedLocation) setLocation(storedLocation);
+      if (sessionStorage.getItem("planco_custom") === "true") setIsCustom(true);
     } catch {
       // fallback維持
     }
@@ -95,6 +98,16 @@ export default function RoulettePage() {
     [suggestions]
   );
 
+  const handleDecide = () => {
+    if (!selectedSuggestion) return;
+    saveHistory({
+      type: isCustom ? "custom" : "ai",
+      conditions: isCustom ? {} : { location },
+      options: suggestions.map((s) => s.name),
+      selected_option: selectedSuggestion.name,
+    });
+  };
+
   const handleReSpin = () => {
     setSelectedSuggestion(null);
     setShowConfetti(false);
@@ -108,6 +121,7 @@ export default function RoulettePage() {
         location={location}
         onClose={() => setSelectedSuggestion(null)}
         onReSpin={handleReSpin}
+        onDecide={handleDecide}
       />
 
       <main

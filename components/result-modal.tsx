@@ -9,10 +9,11 @@ interface ResultModalProps {
   location: string;
   onClose: () => void;
   onReSpin: () => void;
+  onDecide?: () => void;
   reSpinLabel?: string;
 }
 
-export default function ResultModal({ suggestion, location, onClose, onReSpin, reSpinLabel }: ResultModalProps) {
+export default function ResultModal({ suggestion, location, onClose, onReSpin, onDecide, reSpinLabel }: ResultModalProps) {
   const reSpinText = reSpinLabel ?? "もう一度ルーレットを回す";
   const ReSpinIcon = reSpinLabel ? Shuffle : RotateCcw;
   const mapsUrl = suggestion
@@ -93,6 +94,7 @@ export default function ResultModal({ suggestion, location, onClose, onReSpin, r
                   href={mapsUrl}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={onDecide}
                   className="w-full py-4 rounded-2xl font-extrabold text-white text-base shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all"
                   style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}
                 >

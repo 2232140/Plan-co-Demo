@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Users, Wallet, Sparkles, Settings, MapPin, AlertCircle, PenLine } from "lucide-react";
+import { Users, Wallet, Sparkles, Settings, MapPin, AlertCircle, PenLine, History } from "lucide-react";
 import LoadingScreen from "@/components/loading-screen";
 import { Suggestion } from "@/types/planco";
 
@@ -93,7 +93,14 @@ export default function HomePage() {
       >
         <div className="max-w-md mx-auto px-4 py-10">
           {/* Header */}
-          <header className="text-center mb-8">
+          <header className="text-center mb-8 relative">
+            <button
+              onClick={() => router.push("/history")}
+              className="absolute right-0 top-1 p-2 rounded-full bg-white/30 hover:bg-white/50 transition-colors active:scale-95"
+              aria-label="履歴"
+            >
+              <History size={20} className="text-white" />
+            </button>
             <h1 className="text-5xl font-extrabold text-white drop-shadow-md tracking-wide">
               Plan-co
             </h1>
@@ -241,7 +248,10 @@ export default function HomePage() {
               >
                 プランを決める！✨
               </button>
-              <button className="w-full py-3 rounded-2xl font-bold text-gray-400 bg-gray-100 hover:bg-gray-200 transition-all text-sm flex items-center justify-center gap-2 active:scale-95">
+              <button
+                onClick={() => router.push("/custom")}
+                className="w-full py-3 rounded-2xl font-bold text-gray-400 bg-gray-100 hover:bg-gray-200 transition-all text-sm flex items-center justify-center gap-2 active:scale-95"
+              >
                 <Settings size={15} />
                 自分でルーレットを作る
               </button>

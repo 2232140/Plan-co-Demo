@@ -12,3 +12,17 @@ export interface SuggestRequest {
   theme: string;
   location: string;
 }
+
+export interface HistoryEntry {
+  id: string;
+  created_at: string;
+  type: "ai" | "custom";
+  conditions: {
+    peopleCount?: string;
+    budget?: string;
+    theme?: string;
+    location?: string;
+  };
+  options: string[];
+  selected_option: string;
+}

@@ -1,0 +1,24 @@
+{
+  "name": "Plan-co",
+  "short_name": "Plan-co",
+  "description": "友達や恋人と遊びに行く予定を、AIとルーレットでスムーズに決めよう！",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFB5A7",
+  "theme_color": "#FFB5A7",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
