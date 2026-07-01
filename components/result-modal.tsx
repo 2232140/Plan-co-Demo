@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, AnimatePresence } from "framer-motion";
-import { X, MapPin, RotateCcw, Wallet, MessageCircle, Lightbulb } from "lucide-react";
+import { X, MapPin, RotateCcw, Shuffle, Wallet, MessageCircle, Lightbulb } from "lucide-react";
 import { Suggestion } from "@/types/planco";
 
 interface ResultModalProps {
@@ -9,9 +9,12 @@ interface ResultModalProps {
   location: string;
   onClose: () => void;
   onReSpin: () => void;
+  reSpinLabel?: string;
 }
 
-export default function ResultModal({ suggestion, location, onClose, onReSpin }: ResultModalProps) {
+export default function ResultModal({ suggestion, location, onClose, onReSpin, reSpinLabel }: ResultModalProps) {
+  const reSpinText = reSpinLabel ?? "もう一度ルーレットを回す";
+  const ReSpinIcon = reSpinLabel ? Shuffle : RotateCcw;
   const mapsUrl = suggestion
     ? `https://www.google.com/maps/search/${encodeURIComponent(suggestion.name + " " + location)}`
     : "#";
@@ -100,8 +103,8 @@ export default function ResultModal({ suggestion, location, onClose, onReSpin }:
                   onClick={onReSpin}
                   className="w-full py-3.5 rounded-2xl font-bold text-gray-500 bg-gray-100 hover:bg-gray-200 transition-all text-sm flex items-center justify-center gap-2 active:scale-95"
                 >
-                  <RotateCcw size={16} />
-                  もう一度ルーレットを回す
+                  <ReSpinIcon size={16} />
+                  {reSpinText}
                 </button>
               </div>
             </div>

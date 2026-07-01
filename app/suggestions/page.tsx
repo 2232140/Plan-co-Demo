@@ -47,6 +47,7 @@ export default function SuggestionsPage() {
           setSelected(null);
           router.push("/roulette");
         }}
+        reSpinLabel="ルーレットで決める"
       />
 
       <main

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Users, Wallet, Sparkles, Settings, MapPin, AlertCircle } from "lucide-react";
+import { Users, Wallet, Sparkles, Settings, MapPin, AlertCircle, PenLine } from "lucide-react";
 import LoadingScreen from "@/components/loading-screen";
 import { Suggestion } from "@/types/planco";
 
@@ -37,6 +37,7 @@ export default function HomePage() {
   const [people, setPeople] = useState("2人");
   const [budget, setBudget] = useState("〜3,000円");
   const [themes, setThemes] = useState<string[]>([]);
+  const [freeTheme, setFreeTheme] = useState("");
   const [location, setLocation] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,7 +59,10 @@ export default function HomePage() {
         body: JSON.stringify({
           peopleCount: people,
           budget,
-          theme: themes.length > 0 ? themes.join("・") : "なんでも",
+          theme: [
+            ...themes,
+            freeTheme.trim(),
+          ].filter(Boolean).join("・") || "なんでも",
           location: location.trim() || "どこでも",
         }),
       });
@@ -213,6 +217,17 @@ export default function HomePage() {
                     <span className="mt-1">{opt.label}</span>
                   </button>
                 ))}
+              </div>
+              {/* Free theme input */}
+              <div className="mt-3 flex items-center gap-2">
+                <PenLine size={15} className="text-purple-300 shrink-0" />
+                <input
+                  type="text"
+                  value={freeTheme}
+                  onChange={(e) => setFreeTheme(e.target.value)}
+                  placeholder="自由に入力（例：デート、家族連れ、アイスが食べたい）"
+                  className="w-full px-4 py-2.5 rounded-2xl border-2 border-purple-100 bg-purple-50 text-gray-700 font-bold placeholder:text-gray-300 placeholder:font-normal focus:outline-none focus:border-purple-300 text-sm transition-colors"
+                />
               </div>
             </section>
 
