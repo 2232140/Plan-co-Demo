@@ -225,7 +225,7 @@ export default function HomePage() {
                   type="text"
                   value={freeTheme}
                   onChange={(e) => setFreeTheme(e.target.value)}
-                  placeholder="自由に入力（例：デート、家族連れ、アイスが食べたい）"
+                  placeholder="自由に入力（例：デート）"
                   className="w-full px-4 py-2.5 rounded-2xl border-2 border-purple-100 bg-purple-50 text-gray-700 font-bold placeholder:text-gray-300 placeholder:font-normal focus:outline-none focus:border-purple-300 text-sm transition-colors"
                 />
               </div>
