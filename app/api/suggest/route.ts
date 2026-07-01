@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenAI } from "@google/genai";
 import { NextRequest, NextResponse } from "next/server";
 import { Suggestion } from "@/types/planco";
 
@@ -22,11 +22,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     location: string;
   };
 
-  const genAI = new GoogleGenerativeAI(apiKey);
-  const model = genAI.getGenerativeModel({
-    model: "gemini-1.5-flash",
-    generationConfig: { responseMimeType: "application/json" },
-  });
+  const ai = new GoogleGenAI({ apiKey });
 
   const prompt = `
 あなたは日本の遊びスポット提案AIです。
@@ -61,8 +57,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 `;
 
   try {
-    const result = await model.generateContent(prompt);
-    const text = result.response.text();
+    const result = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: { responseMimeType: "application/json" },
+    });
+    const text = result.text ?? "";
     const data = JSON.parse(text) as { suggestions: Suggestion[] };
 
     if (!Array.isArray(data.suggestions) || data.suggestions.length === 0) {
