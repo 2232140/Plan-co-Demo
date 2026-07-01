@@ -111,7 +111,8 @@ export default function RouletteWheel({ items, spinTrigger, onComplete }: Roulet
 
   const handleAnimationComplete = useCallback(() => {
     if (targetRotation === 0) return;
-    const normalized = ((targetRotation % 360) + 360) % 360;
+    // ホイールがR度時計回りに回ると、ポインターには元々(360-R)度の位置にいたセクターが来る
+    const normalized = (360 - (targetRotation % 360)) % 360;
     const winnerIdx = Math.floor(normalized / SECTOR_ANGLE) % N;
     onComplete(items[winnerIdx]);
   }, [targetRotation, SECTOR_ANGLE, N, items, onComplete]);
