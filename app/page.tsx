@@ -250,7 +250,7 @@ export default function HomePage() {
               </button>
               <button
                 onClick={() => router.push("/custom")}
-                className="w-full py-3 rounded-2xl font-bold text-gray-400 bg-gray-100 hover:bg-gray-200 transition-all text-sm flex items-center justify-center gap-2 active:scale-95"
+                className="w-full py-3 rounded-2xl font-bold text-purple-500 bg-purple-50 hover:bg-purple-100 transition-all text-sm flex items-center justify-center gap-2 active:scale-95"
               >
                 <Settings size={15} />
                 自分でルーレットを作る
