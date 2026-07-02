@@ -139,6 +139,7 @@ export default function RoulettePage() {
         onClose={() => setSelectedSuggestion(null)}
         onReSpin={handleReSpin}
         onDecide={handleDecide}
+        reSpinLabel={activeTab === "amida" ? "もう一度あみだくじをする" : undefined}
       />
 
       <main

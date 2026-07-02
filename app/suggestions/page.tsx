@@ -152,7 +152,7 @@ export default function SuggestionsPage() {
               style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}
             >
               <Shuffle size={20} />
-              やっぱり決められない…ルーレットで決める！
+              やっぱり決められない…ルーレット・あみだくじで決める！
             </button>
           </div>
         </div>
