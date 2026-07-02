@@ -158,36 +158,34 @@ export default function HomePage() {
                   <span className="text-gray-400 font-medium ml-1">（任意）</span>
                 </span>
               </div>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={location}
-                  onChange={(e) => {
-                    setLocation(e.target.value);
-                    if (e.target.value !== "現在地") setCoords(null);
-                  }}
-                  placeholder="例：渋谷、新宿、梅田..."
-                  className="flex-1 px-4 py-2.5 rounded-2xl border-2 border-rose-100 bg-rose-50 text-gray-700 font-bold placeholder:text-gray-300 placeholder:font-normal focus:outline-none focus:border-rose-300 text-sm transition-colors"
-                />
+              <input
+                type="text"
+                value={location}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  if (e.target.value !== "現在地") setCoords(null);
+                }}
+                placeholder="例：渋谷、新宿、梅田..."
+                className="w-full px-4 py-2.5 rounded-2xl border-2 border-rose-100 bg-rose-50 text-gray-700 font-bold placeholder:text-gray-300 placeholder:font-normal focus:outline-none focus:border-rose-300 text-sm transition-colors"
+              />
+              {/* Quick chips */}
+              <div className="flex flex-wrap gap-2 mt-2">
                 <button
                   onClick={handleGetLocation}
                   disabled={geoLoading}
-                  className={`px-3 py-2.5 rounded-2xl font-bold text-sm flex items-center gap-1.5 transition-all active:scale-95 shrink-0 ${
+                  className={`px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1 transition-all duration-200 active:scale-95 disabled:opacity-60 ${
                     coords
-                      ? "bg-rose-400 text-white shadow-sm"
+                      ? "bg-rose-400 text-white shadow-sm scale-105"
                       : "bg-rose-50 text-rose-400 hover:bg-rose-100"
-                  } disabled:opacity-60`}
+                  }`}
                 >
                   {geoLoading ? (
-                    <Loader2 size={15} className="animate-spin" />
+                    <Loader2 size={11} className="animate-spin" />
                   ) : (
-                    <LocateFixed size={15} />
+                    <LocateFixed size={11} />
                   )}
-                  現在地
+                  現在地を使用
                 </button>
-              </div>
-              {/* Quick chips */}
-              <div className="flex flex-wrap gap-2 mt-2">
                 {QUICK_AREAS.map((area) => (
                   <button
                     key={area}
