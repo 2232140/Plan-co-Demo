@@ -93,14 +93,17 @@ export default function RoomPage() {
   const confettiTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Selected candidates for roulette (top voted or all)
-  const selectedCandidates = useMemo(() => {
-    if (!room) return [];
+  const { selectedCandidates, voteFilterActive } = useMemo(() => {
+    if (!room) return { selectedCandidates: [], voteFilterActive: false };
     const candidates = room.suggestions;
     const withVotes = candidates.filter((s) => (totalVotes[s.id] ?? 0) > 0);
-    if (withVotes.length < 2) return candidates;
-    return [...withVotes]
-      .sort((a, b) => (totalVotes[b.id] ?? 0) - (totalVotes[a.id] ?? 0))
-      .slice(0, 4);
+    if (withVotes.length < 2) return { selectedCandidates: candidates, voteFilterActive: false };
+    return {
+      selectedCandidates: [...withVotes]
+        .sort((a, b) => (totalVotes[b.id] ?? 0) - (totalVotes[a.id] ?? 0))
+        .slice(0, 4),
+      voteFilterActive: true,
+    };
   }, [room, totalVotes]);
 
   // Fetch room data
@@ -131,12 +134,19 @@ export default function RoomPage() {
     channel
       .on("presence", { event: "sync" }, () => {
         const state = channel.presenceState<Participant>();
-        const list = Object.values(state).flat();
-        setParticipants(list);
+        const raw = Object.values(state).flat();
+        // Deduplicate by userId (track() may generate multiple entries per client)
+        const seen = new Set<string>();
+        const unique = raw.filter((p) => {
+          if (seen.has(p.userId)) return false;
+          seen.add(p.userId);
+          return true;
+        });
+        setParticipants(unique);
 
-        // Compute total votes from all participants
+        // Compute total votes from deduplicated participants
         const totals: Record<string, number> = {};
-        list.forEach((p) => {
+        unique.forEach((p) => {
           if (!p.votes) return;
           Object.entries(p.votes).forEach(([cid, voted]) => {
             if (voted) totals[cid] = (totals[cid] ?? 0) + 1;
@@ -145,19 +155,23 @@ export default function RoomPage() {
         setTotalVotes(totals);
       })
       .on("broadcast", { event: "COMMENT_ADD" }, ({ payload }) => {
-        const { candidateId, commentNickname, text } = payload as {
+        const { commentId, candidateId, commentNickname, text } = payload as {
+          commentId: string;
           candidateId: string;
           commentNickname: string;
           text: string;
         };
-        const commentId = crypto.randomUUID();
-        setAllComments((prev) => ({
-          ...prev,
-          [candidateId]: [
-            ...(prev[candidateId] ?? []),
-            { id: commentId, nickname: commentNickname, text },
-          ].slice(-4),
-        }));
+        setAllComments((prev) => {
+          // Skip if already added optimistically (sender's own comment)
+          if ((prev[candidateId] ?? []).some((c) => c.id === commentId)) return prev;
+          return {
+            ...prev,
+            [candidateId]: [
+              ...(prev[candidateId] ?? []),
+              { id: commentId, nickname: commentNickname, text },
+            ].slice(-4),
+          };
+        });
         setTimeout(() => {
           setAllComments((prev) => ({
             ...prev,
@@ -199,10 +213,26 @@ export default function RoomPage() {
   }, []);
 
   const handleComment = useCallback((candidateId: string, text: string) => {
+    const commentId = crypto.randomUUID();
+    // Optimistic local update (visible immediately to sender)
+    setAllComments((prev) => ({
+      ...prev,
+      [candidateId]: [
+        ...(prev[candidateId] ?? []),
+        { id: commentId, nickname, text },
+      ].slice(-4),
+    }));
+    setTimeout(() => {
+      setAllComments((prev) => ({
+        ...prev,
+        [candidateId]: (prev[candidateId] ?? []).filter((c) => c.id !== commentId),
+      }));
+    }, 8000);
+    // Broadcast to other clients (handler skips if commentId already exists)
     channelRef.current?.send({
       type: "broadcast",
       event: "COMMENT_ADD",
-      payload: { candidateId, commentNickname: nickname, text },
+      payload: { commentId, candidateId, commentNickname: nickname, text },
     });
   }, [nickname]);
 
@@ -395,7 +425,7 @@ export default function RoomPage() {
                     totalLikes={totalVotes[s.id] ?? 0}
                     likedByMe={myVotes[s.id] ?? false}
                     comments={allComments[s.id] ?? []}
-                    isSelectedForRoulette={selectedCandidates.some((sc) => sc.id === s.id)}
+                    isSelectedForRoulette={voteFilterActive && selectedCandidates.some((sc) => sc.id === s.id)}
                     onVote={handleVote}
                     onComment={handleComment}
                   />
