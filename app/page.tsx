@@ -1,10 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
+import LoadingScreen from "@/components/loading-screen";
 
 export default function LandingPage() {
   const router = useRouter();
+  const [soloLoading, setSoloLoading] = useState(false);
+
+  if (soloLoading) return <LoadingScreen message="読み込み中..." subMessage="🎢 少々お待ちください" />;
 
   return (
     <main
@@ -34,7 +39,7 @@ export default function LandingPage() {
           initial={{ opacity: 0, x: -32 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.45, delay: 0.15 }}
-          onClick={() => router.push("/solo")}
+          onClick={() => { setSoloLoading(true); router.push("/solo"); }}
           className="w-full rounded-3xl p-6 text-left shadow-2xl active:scale-[0.97] transition-transform"
           style={{ background: "linear-gradient(135deg, #ffffff 0%, #fff0f0 100%)" }}
         >

@@ -35,7 +35,7 @@ function parseSuggestions(text: string): Suggestion[] | null {
   return null;
 }
 
-export default function AIChatTab() {
+export default function AIChatTab({ isActive = true }: { isActive?: boolean }) {
   const router = useRouter();
   const [messages, setMessages]   = useState<Message[]>([INITIAL_MESSAGE]);
   const [history, setHistory]     = useState<HistoryEntry[]>([]);
@@ -89,7 +89,7 @@ export default function AIChatTab() {
   return (
     <div className="flex flex-col min-h-screen">
       {/* Messages */}
-      <div className="flex-1 px-4 pt-4 pb-4 space-y-3">
+      <div className="flex-1 px-4 pt-4 pb-28 space-y-3">
         <AnimatePresence initial={false}>
           {messages.map((msg, i) => (
             <motion.div key={i}
@@ -119,34 +119,33 @@ export default function AIChatTab() {
         <div ref={bottomRef} />
       </div>
 
-      {/* Suggestion CTA */}
-      {suggestions && (
-        <div className="px-4 pb-3">
-          <motion.button initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-            onClick={handleViewSuggestions}
-            className="w-full py-4 rounded-2xl font-extrabold text-white text-base shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all"
-            style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}>
-            <Sparkles size={20} />AIが提案したプランを見る！
-          </motion.button>
+      {/* Fixed bottom bar (suggestion CTA + input) */}
+      {isActive && (
+        <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md z-10 px-4 pb-6 pt-3"
+          style={{ background: "linear-gradient(to top, #FEC89A 80%, transparent)" }}>
+          {suggestions && (
+            <motion.button initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+              onClick={handleViewSuggestions}
+              className="w-full py-3 mb-2 rounded-2xl font-extrabold text-white text-base shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all"
+              style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}>
+              <Sparkles size={20} />AIが提案したプランを見る！
+            </motion.button>
+          )}
+          <div className="flex gap-2">
+            <input type="text" value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
+              placeholder="メッセージを入力..."
+              disabled={isLoading || !!suggestions}
+              className="flex-1 px-4 py-3 rounded-2xl bg-white/90 text-gray-700 font-bold placeholder:text-gray-300 placeholder:font-normal focus:outline-none text-sm disabled:opacity-50" />
+            <button onClick={handleSend} disabled={isLoading || !input.trim() || !!suggestions}
+              className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg transition-all active:scale-95 disabled:opacity-50"
+              style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}>
+              {isLoading ? <Loader2 size={18} className="text-white animate-spin" /> : <Send size={18} className="text-white" />}
+            </button>
+          </div>
         </div>
       )}
-
-      {/* Input */}
-      <div className="px-4 pb-8 pt-2">
-        <div className="flex gap-2">
-          <input type="text" value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && handleSend()}
-            placeholder="メッセージを入力..."
-            disabled={isLoading || !!suggestions}
-            className="flex-1 px-4 py-3 rounded-2xl bg-white/90 text-gray-700 font-bold placeholder:text-gray-300 placeholder:font-normal focus:outline-none text-sm disabled:opacity-50" />
-          <button onClick={handleSend} disabled={isLoading || !input.trim() || !!suggestions}
-            className="w-11 h-11 rounded-2xl flex items-center justify-center shadow-lg transition-all active:scale-95 disabled:opacity-50"
-            style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}>
-            {isLoading ? <Loader2 size={18} className="text-white animate-spin" /> : <Send size={18} className="text-white" />}
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

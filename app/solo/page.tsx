@@ -78,17 +78,14 @@ export default function SoloPage() {
         </div>
       </header>
 
-      {/* Sliding content — all 4 tabs stay mounted */}
-      <div className="max-w-md mx-auto overflow-x-hidden"
+      {/* Tab content — all 4 tabs stay mounted, only active one is visible */}
+      <div className="max-w-md mx-auto"
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}>
-        <div className="flex transition-transform duration-300 ease-out"
-          style={{ width: "400%", transform: `translateX(-${activeTab * 25}%)` }}>
-          <div className="w-1/4"><LocationTab /></div>
-          <div className="w-1/4"><DayPlanTab /></div>
-          <div className="w-1/4"><AIChatTab /></div>
-          <div className="w-1/4"><RouletteTab /></div>
-        </div>
+        <div className={activeTab === 0 ? "block" : "hidden"}><LocationTab /></div>
+        <div className={activeTab === 1 ? "block" : "hidden"}><DayPlanTab /></div>
+        <div className={activeTab === 2 ? "block" : "hidden"}><AIChatTab isActive={activeTab === 2} /></div>
+        <div className={activeTab === 3 ? "block" : "hidden"}><RouletteTab /></div>
       </div>
     </div>
   );
