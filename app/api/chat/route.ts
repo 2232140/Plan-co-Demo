@@ -78,8 +78,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const chat = ai.chats.create({
-        model: "gemini-2.5-flash",
-        config: { systemInstruction, thinkingConfig: { thinkingBudget: 0 } },
+        model: "gemini-2.0-flash",
+        config: { systemInstruction },
         history: history ?? [],
       });
       const response = await chat.sendMessage({ message });
