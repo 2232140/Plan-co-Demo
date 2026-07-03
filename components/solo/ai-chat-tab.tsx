@@ -107,15 +107,24 @@ export default function AIChatTab() {
     setMessages((p) => [...p, userMsg]);
     setIsLoading(true);
     const newHistory: HistoryEntry[] = [...history, { role: "user", parts: [{ text }] }];
+    let aiText: string | null = null;
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ history, message: text, chatMode }),
+        });
+        if (!res.ok) throw new Error(`${res.status}`);
+        const data = await res.json() as { text: string };
+        aiText = data.text;
+        break;
+      } catch {
+        if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
+      }
+    }
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ history, message: text, chatMode }),
-      });
-      if (!res.ok) throw new Error("AI応答エラー");
-      const data = await res.json() as { text: string };
-      const aiText = data.text;
+      if (aiText === null) throw new Error("failed");
 
       if (chatMode === "plan") {
         const plan = parseDayPlan(aiText);
@@ -124,7 +133,7 @@ export default function AIChatTab() {
           const planMsg: PlanMessage = { role: "plan-result", plan };
           setMessages((p) => [...p, planMsg]);
         } else {
-          setMessages((p) => [...p, { role: "ai", text: aiText }]);
+          setMessages((p) => [...p, { role: "ai", text: aiText! }]);
         }
       } else {
         const parsed = parseSuggestions(aiText);
@@ -132,7 +141,7 @@ export default function AIChatTab() {
           setSuggestions(parsed);
           setMessages((p) => [...p, { role: "ai", text: "✨ プランが揃いました！下のボタンから確認してね🎉" }]);
         } else {
-          setMessages((p) => [...p, { role: "ai", text: aiText }]);
+          setMessages((p) => [...p, { role: "ai", text: aiText! }]);
         }
       }
       setHistory([...newHistory, { role: "model", parts: [{ text: aiText }] }]);
@@ -158,7 +167,7 @@ export default function AIChatTab() {
       {/* Initial mode selection */}
       {chatMode === "initial" && (
         <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
-          <p className="text-white/80 text-sm font-bold">今日はどっちを決める？</p>
+          <p className="text-white font-extrabold text-2xl drop-shadow-md text-center">今日はどっちを決める？</p>
           <div className="w-full space-y-3">
             <motion.button whileTap={{ scale: 0.97 }}
               onClick={() => startMode("place")}

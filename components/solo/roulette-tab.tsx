@@ -1,12 +1,10 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import { Plus, Trash2, AlertCircle } from "lucide-react";
+import { Plus, Trash2, AlertCircle, RotateCcw } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import RouletteWheel from "@/components/roulette-wheel";
 import AmidaKuji from "@/components/amida-kuji";
-import ResultModal from "@/components/result-modal";
-import { Suggestion } from "@/types/planco";
 
 const CONFETTI_EMOJIS = ["🎉", "✨", "🎊", "⭐", "🌟", "💫"];
 
@@ -31,7 +29,7 @@ export default function RouletteTab() {
   const [mode, setMode]             = useState<"roulette" | "amida">("roulette");
   const [spinTrigger, setSpinTrigger] = useState(0);
   const [isSpinning, setIsSpinning] = useState(false);
-  const [selected, setSelected]     = useState<Suggestion | null>(null);
+  const [isDone, setIsDone]         = useState(false);
   const [showConfetti, setShowConfetti] = useState(false);
   const [amidaKey, setAmidaKey]     = useState(0);
   const [error, setError]           = useState<string | null>(null);
@@ -48,46 +46,36 @@ export default function RouletteTab() {
     if (isSpinning) return;
     if (filledItems.length < 2) { setError("2つ以上の選択肢を入力してください"); return; }
     setError(null);
-    setSelected(null);
+    setIsDone(false);
     setShowConfetti(false);
     setIsSpinning(true);
     setSpinTrigger((t) => t + 1);
   };
 
-  const handleComplete = useCallback((name: string) => {
-    setSelected({ id: "1", name, budget: "", description: "", reason: "" });
+  const handleComplete = useCallback(() => {
     setIsSpinning(false);
+    setIsDone(true);
     setShowConfetti(true);
     if (confettiTimer.current) clearTimeout(confettiTimer.current);
     confettiTimer.current = setTimeout(() => setShowConfetti(false), 2200);
   }, []);
 
-  const handleAmidaComplete = useCallback((name: string) => {
-    setSelected({ id: "1", name, budget: "", description: "", reason: "" });
+  const handleAmidaComplete = useCallback(() => {
+    setIsDone(true);
     setShowConfetti(true);
     if (confettiTimer.current) clearTimeout(confettiTimer.current);
     confettiTimer.current = setTimeout(() => setShowConfetti(false), 2200);
   }, []);
 
   const handleReSpin = () => {
-    setSelected(null);
+    setIsDone(false);
     setShowConfetti(false);
     if (mode === "roulette") handleSpin();
     else setAmidaKey((k) => k + 1);
   };
 
   return (
-    <>
-      <ResultModal
-        suggestion={selected}
-        location=""
-        onClose={() => setSelected(null)}
-        onReSpin={handleReSpin}
-        reSpinLabel={mode === "amida" ? "もう一度あみだくじをする" : undefined}
-        hideMap={true}
-      />
-
-      <div className="px-4 py-5 space-y-4">
+    <div className="px-4 py-5 space-y-4">
         {error && (
           <div className="flex items-center gap-2 bg-red-100 text-red-600 rounded-2xl px-4 py-3 text-sm font-bold">
             <AlertCircle size={16} className="shrink-0" />{error}
@@ -146,17 +134,16 @@ export default function RouletteTab() {
                     選択肢を2つ以上入力すると<br />ルーレットが表示されます
                   </div>
                 )}
-                {selected && !isSpinning && (
+                {isDone && !isSpinning && (
                   <div className="mt-4 text-center animate-pop-in">
-                    <p className="text-xs text-gray-400 font-bold tracking-widest">決まりました！</p>
-                    <p className="text-2xl font-extrabold text-orange-500 mt-1">{selected.name} 🎉</p>
+                    <p className="text-3xl font-extrabold text-orange-500">🎉 決定！</p>
                   </div>
                 )}
               </div>
               <button onClick={handleSpin} disabled={isSpinning || filledItems.length < 2}
                 className={`w-full mt-3 py-4 rounded-2xl font-extrabold text-white text-lg shadow-lg transition-all flex items-center justify-center gap-2 ${isSpinning ? "opacity-70 cursor-not-allowed" : "active:scale-95"}`}
                 style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}>
-                {isSpinning ? "🌀 回転中..." : selected ? "🔄 もう一度回す" : "🎡 START"}
+                {isSpinning ? "🌀 回転中..." : isDone ? "🔄 もう一度回す" : "🎡 START"}
               </button>
             </motion.div>
           ) : (
@@ -171,10 +158,15 @@ export default function RouletteTab() {
                   </div>
                 )}
               </div>
+              {isDone && (
+                <button onClick={handleReSpin}
+                  className="w-full mt-3 py-4 rounded-2xl font-bold text-white/80 bg-white/20 hover:bg-white/30 transition-all text-sm flex items-center justify-center gap-2 active:scale-95">
+                  <RotateCcw size={15} />もう一度あみだくじをする
+                </button>
+              )}
             </motion.div>
           )}
         </AnimatePresence>
       </div>
-    </>
   );
 }

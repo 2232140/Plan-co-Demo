@@ -132,7 +132,7 @@ export default function DayPlanTab() {
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-extrabold text-sm shadow-sm shrink-0"
                   style={{ backgroundColor: SLOT_COLORS[i] }}>
-                  {["朝", "昼", "夜"][i]}
+                  {slot.timeSlot.split(/[\s(]/)[0]}
                 </div>
                 <div className="min-w-0">
                   <p className={`text-xs font-bold ${SLOT_TEXT[i]}`}>{slot.timeSlot}</p>

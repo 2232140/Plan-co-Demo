@@ -73,18 +73,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const systemInstruction = chatMode === "plan" ? PLAN_SYSTEM_INSTRUCTION : PLACE_SYSTEM_INSTRUCTION;
 
   const ai = new GoogleGenAI({ apiKey });
-  const chat = ai.chats.create({
-    model: "gemini-2.5-flash",
-    config: { systemInstruction },
-    history: history ?? [],
-  });
 
-  try {
-    const response = await chat.sendMessage({ message });
-    const text = response.text ?? "";
-    return NextResponse.json({ text });
-  } catch (err) {
-    console.error("Chat API error:", err);
-    return NextResponse.json({ error: "AI応答の生成に失敗しました" }, { status: 502 });
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const chat = ai.chats.create({
+        model: "gemini-2.5-flash",
+        config: { systemInstruction, thinkingConfig: { thinkingBudget: 0 } } as Record<string, unknown>,
+        history: history ?? [],
+      });
+      const response = await chat.sendMessage({ message });
+      const text = response.text ?? "";
+      return NextResponse.json({ text });
+    } catch (err) {
+      lastError = err;
+      if (attempt === 0) await new Promise((r) => setTimeout(r, 800));
+    }
   }
+
+  console.error("Chat API error:", lastError);
+  return NextResponse.json({ error: "AI応答の生成に失敗しました" }, { status: 502 });
 }
