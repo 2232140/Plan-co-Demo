@@ -62,32 +62,38 @@ export default function ResultModal({ suggestion, location, onClose, onReSpin, o
                 <h2 className="text-3xl font-extrabold text-gray-800">{suggestion.name}</h2>
               </div>
 
-              {/* Details */}
-              <div className="space-y-3 mb-6">
-                <div className="flex items-start gap-3 bg-yellow-50 rounded-2xl p-3">
-                  <Wallet size={18} className="text-yellow-500 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-yellow-600">想定予算</p>
-                    <p className="text-gray-700 font-bold">{suggestion.budget}</p>
-                  </div>
+              {/* Details — only shown when fields are non-empty */}
+              {(suggestion.budget || suggestion.description || suggestion.reason) && (
+                <div className="space-y-3 mb-6">
+                  {suggestion.budget && (
+                    <div className="flex items-start gap-3 bg-yellow-50 rounded-2xl p-3">
+                      <Wallet size={18} className="text-yellow-500 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-yellow-600">想定予算</p>
+                        <p className="text-gray-700 font-bold">{suggestion.budget}</p>
+                      </div>
+                    </div>
+                  )}
+                  {suggestion.description && (
+                    <div className="flex items-start gap-3 bg-purple-50 rounded-2xl p-3">
+                      <MessageCircle size={18} className="text-purple-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-purple-500">スポットについて</p>
+                        <p className="text-gray-700 text-sm leading-relaxed">{suggestion.description}</p>
+                      </div>
+                    </div>
+                  )}
+                  {suggestion.reason && (
+                    <div className="flex items-start gap-3 rounded-2xl p-3" style={{ backgroundColor: "#f0fdf4" }}>
+                      <Lightbulb size={18} className="text-emerald-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-xs font-bold text-emerald-500">選ばれた理由</p>
+                        <p className="text-gray-700 text-sm leading-relaxed">{suggestion.reason}</p>
+                      </div>
+                    </div>
+                  )}
                 </div>
-
-                <div className="flex items-start gap-3 bg-purple-50 rounded-2xl p-3">
-                  <MessageCircle size={18} className="text-purple-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-purple-500">スポットについて</p>
-                    <p className="text-gray-700 text-sm leading-relaxed">{suggestion.description}</p>
-                  </div>
-                </div>
-
-                <div className="flex items-start gap-3 bg-mint-50 rounded-2xl p-3" style={{ backgroundColor: "#f0fdf4" }}>
-                  <Lightbulb size={18} className="text-emerald-400 shrink-0 mt-0.5" />
-                  <div>
-                    <p className="text-xs font-bold text-emerald-500">選ばれた理由</p>
-                    <p className="text-gray-700 text-sm leading-relaxed">{suggestion.reason}</p>
-                  </div>
-                </div>
-              </div>
+              )}
 
               {/* Action buttons */}
               <div className="space-y-3">

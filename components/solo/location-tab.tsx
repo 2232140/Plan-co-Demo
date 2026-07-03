@@ -69,7 +69,7 @@ export default function LocationTab() {
     }
   };
 
-  const loadingMsg = coords ? "現在地の天気を考慮して最適なプランを探索中" : "Plan-coが楽しい予定を考え中";
+  const loadingMsg = coords ? "現在地の天気を考慮して\n最適なプランを探索中" : "Plan-coが楽しい予定を考え中";
   const loadingSub = coords ? "🌤️ 天気・気温・風速を確認しています..." : "🎢 少々お待ちください";
 
   return (

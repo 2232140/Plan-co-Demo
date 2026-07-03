@@ -154,15 +154,11 @@ export default function AIChatTab() {
   const isDone = !!suggestions || !!dayPlan;
 
   return (
-    <div className="flex flex-col" style={{ height: "calc(100dvh - 140px)" }}>
+    <div className="flex flex-col h-full">
       {/* Initial mode selection */}
       {chatMode === "initial" && (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-5">
-          <div className="text-center">
-            <div className="text-4xl mb-2">🌸</div>
-            <p className="font-extrabold text-white text-xl drop-shadow-md">ぷらんちゃんです！</p>
-            <p className="text-white/80 text-sm mt-1">今日はどっちを決める？</p>
-          </div>
+        <div className="flex-1 flex flex-col items-center justify-center px-6 gap-4">
+          <p className="text-white/80 text-sm font-bold">今日はどっちを決める？</p>
           <div className="w-full space-y-3">
             <motion.button whileTap={{ scale: 0.97 }}
               onClick={() => startMode("place")}
@@ -254,6 +250,13 @@ export default function AIChatTab() {
                 className="w-full py-3 mb-2 rounded-2xl font-extrabold text-white text-base shadow-lg flex items-center justify-center gap-2 active:scale-95 transition-all"
                 style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}>
                 <Sparkles size={20} />AIが提案したプランを見る！
+              </motion.button>
+            )}
+            {dayPlan && (
+              <motion.button initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                onClick={() => setDayPlan(null)}
+                className="w-full py-3 mb-2 rounded-2xl font-bold text-white/80 bg-white/20 hover:bg-white/30 transition-all text-sm flex items-center justify-center gap-2 active:scale-95">
+                🔄 もう一度考えてもらう
               </motion.button>
             )}
             {!isDone && (

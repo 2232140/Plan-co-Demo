@@ -44,10 +44,14 @@ export default function SoloPage() {
     touchStartY.current = null;
   };
 
+  const isChatActive = activeTab === 2;
+
   return (
-    <div className="min-h-screen" style={{ background: "linear-gradient(160deg, #FFB5A7 0%, #FEC89A 100%)" }}>
+    <div
+      className={isChatActive ? "flex flex-col overflow-hidden" : "min-h-screen"}
+      style={{ height: isChatActive ? "100dvh" : undefined, background: "linear-gradient(160deg, #FFB5A7 0%, #FEC89A 100%)" }}>
       {/* Sticky header */}
-      <header className="sticky top-0 z-20 pt-5 pb-3 px-4"
+      <header className={`z-20 pt-5 pb-3 px-4 ${isChatActive ? "shrink-0" : "sticky top-0"}`}
         style={{ background: "linear-gradient(160deg, #FFB5A7 0%, #FEC89A 100%)" }}>
         <div className="max-w-md mx-auto">
           <div className="flex items-center mb-3">
@@ -79,12 +83,13 @@ export default function SoloPage() {
       </header>
 
       {/* Tab content — all 4 tabs stay mounted, only active one is visible */}
-      <div className="max-w-md mx-auto"
+      <div
+        className={`max-w-md mx-auto w-full ${isChatActive ? "flex-1 overflow-hidden" : ""}`}
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}>
         <div className={activeTab === 0 ? "block" : "hidden"}><LocationTab /></div>
         <div className={activeTab === 1 ? "block" : "hidden"}><DayPlanTab /></div>
-        <div className={activeTab === 2 ? "block" : "hidden"}><AIChatTab /></div>
+        <div className={isChatActive ? "h-full" : "hidden"}><AIChatTab /></div>
         <div className={activeTab === 3 ? "block" : "hidden"}><RouletteTab /></div>
       </div>
     </div>
