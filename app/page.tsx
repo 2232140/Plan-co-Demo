@@ -65,7 +65,7 @@ export default function LandingPage() {
           initial={{ opacity: 0, x: 32 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.45, delay: 0.3 }}
-          onClick={() => router.push("/room/new")}
+          onClick={() => router.push("/room/join")}
           className="w-full rounded-3xl p-6 text-left shadow-2xl active:scale-[0.97] transition-transform"
           style={{ background: "linear-gradient(135deg, #e8f4ff 0%, #f0e8ff 100%)" }}
         >
