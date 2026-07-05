@@ -50,7 +50,7 @@ type Phase = "voting" | "suggesting" | "results" | "roulette";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
-const VOTE_TAGS = [
+const ACTIVITY_TAGS = [
   { name: "食べたい", emoji: "🍜" },
   { name: "カフェ", emoji: "☕" },
   { name: "屋内", emoji: "🏠" },
@@ -60,6 +60,22 @@ const VOTE_TAGS = [
   { name: "映え", emoji: "📸" },
   { name: "エンタメ", emoji: "🎭" },
 ];
+
+const LOCATION_TAGS = [
+  { name: "都市部", emoji: "🏙️" },
+  { name: "自然・公園", emoji: "🌿" },
+  { name: "駅近", emoji: "🚉" },
+  { name: "郊外", emoji: "🌄" },
+];
+
+const BUDGET_TAGS = [
+  { name: "〜1000円", emoji: "🪙" },
+  { name: "〜3000円", emoji: "💴" },
+  { name: "〜5000円", emoji: "💰" },
+  { name: "上限なし", emoji: "💎" },
+];
+
+const ALL_VOTE_TAGS = [...ACTIVITY_TAGS, ...LOCATION_TAGS, ...BUDGET_TAGS];
 
 const HEART_PARTICLES = ["❤️", "💕", "💗", "✨"];
 
@@ -135,9 +151,10 @@ export default function InviteRoomPage({
 
   const tagVoteMap = useMemo(() => {
     const map: Record<string, string[]> = {};
-    for (const t of VOTE_TAGS) map[t.name] = [];
+    for (const t of ALL_VOTE_TAGS) map[t.name] = [];
     for (const v of voteRows) {
       if (map[v.tag_name] !== undefined) map[v.tag_name].push(v.member_id);
+      else map[v.tag_name] = [v.member_id];
     }
     return map;
   }, [voteRows]);
@@ -757,7 +774,7 @@ export default function InviteRoomPage({
                         <span className="text-white/70 font-normal">（あなた）</span>
                       )}
                     </p>
-                    {m.is_host && <p className="text-white/80 text-xs">👑</p>}
+                    <p className="text-xs">{m.is_host ? "👑" : " "}</p>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -776,56 +793,85 @@ export default function InviteRoomPage({
                 exit={{ opacity: 0, y: -16 }}
                 className="space-y-4"
               >
-                <div className="bg-white rounded-3xl p-5 shadow-xl">
-                  <p className="text-sm font-extrabold text-gray-700 mb-1 text-center">
-                    やりたいことを選ぼう 🗳️
-                  </p>
-                  <p className="text-xs text-gray-400 text-center mb-4">
-                    タップで投票（複数OK）
-                  </p>
+                <div className="bg-white rounded-3xl p-5 shadow-xl space-y-4">
+                  <div className="text-center">
+                    <p className="text-sm font-extrabold text-gray-700">みんなで選ぼう 🗳️</p>
+                    <p className="text-xs text-gray-400 mt-0.5">タップで投票（複数OK）</p>
+                  </div>
 
-                  <div className="grid grid-cols-2 gap-3">
-                    {VOTE_TAGS.map((tag) => {
-                      const voters = tagVoteMap[tag.name] ?? [];
-                      const voted = myTagVoteSet.has(tag.name);
-                      return (
-                        <motion.button
-                          key={tag.name}
-                          onClick={() => handleTagVote(tag.name)}
-                          whileTap={{ scale: 0.92 }}
-                          className={`relative rounded-2xl px-3 py-4 flex flex-col items-center gap-1 transition-all border-2 ${
-                            voted
-                              ? "border-orange-300 bg-orange-50 shadow-md"
-                              : "border-gray-100 bg-gray-50 hover:border-orange-200"
-                          }`}
-                        >
-                          {voters.length > 0 && (
-                            <div className="flex justify-center gap-0.5 mb-1 flex-wrap">
-                              {voters.slice(0, 4).map((memberId) => (
-                                <SwingAvatar
-                                  key={memberId}
-                                  color={(memberColorMap[memberId] ?? "orange") as AvatarColor}
-                                  size={20}
-                                  swing={false}
-                                />
-                              ))}
-                              {voters.length > 4 && (
-                                <span className="text-xs text-gray-400 font-bold self-end">
-                                  +{voters.length - 4}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                          <span className="text-2xl">{tag.emoji}</span>
-                          <span className={`text-xs font-extrabold ${voted ? "text-orange-500" : "text-gray-600"}`}>
-                            {tag.name}
-                          </span>
-                          {voters.length > 0 && (
-                            <span className="text-xs font-bold text-orange-400">{voters.length}票</span>
-                          )}
-                        </motion.button>
-                      );
-                    })}
+                  {/* テーマ */}
+                  <div>
+                    <p className="text-xs font-extrabold text-gray-400 mb-2">🎯 テーマ</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {ACTIVITY_TAGS.map((tag) => {
+                        const voters = tagVoteMap[tag.name] ?? [];
+                        const voted = myTagVoteSet.has(tag.name);
+                        return (
+                          <motion.button key={tag.name} onClick={() => handleTagVote(tag.name)} whileTap={{ scale: 0.92 }}
+                            className={`relative rounded-2xl px-2 py-3 flex flex-col items-center gap-1 transition-all border-2 ${voted ? "border-orange-300 bg-orange-50 shadow-md" : "border-gray-100 bg-gray-50"}`}>
+                            {voters.length > 0 && (
+                              <div className="flex justify-center gap-0.5 flex-wrap">
+                                {voters.slice(0, 3).map((mid) => <SwingAvatar key={mid} color={(memberColorMap[mid] ?? "orange") as AvatarColor} size={18} swing={false} />)}
+                                {voters.length > 3 && <span className="text-xs text-gray-400 font-bold self-end">+{voters.length - 3}</span>}
+                              </div>
+                            )}
+                            <span className="text-xl">{tag.emoji}</span>
+                            <span className={`text-xs font-extrabold ${voted ? "text-orange-500" : "text-gray-600"}`}>{tag.name}</span>
+                            {voters.length > 0 && <span className="text-xs font-bold text-orange-400">{voters.length}票</span>}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* エリア */}
+                  <div>
+                    <p className="text-xs font-extrabold text-gray-400 mb-2">📍 エリア</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {LOCATION_TAGS.map((tag) => {
+                        const voters = tagVoteMap[tag.name] ?? [];
+                        const voted = myTagVoteSet.has(tag.name);
+                        return (
+                          <motion.button key={tag.name} onClick={() => handleTagVote(tag.name)} whileTap={{ scale: 0.92 }}
+                            className={`relative rounded-2xl px-2 py-3 flex flex-col items-center gap-1 transition-all border-2 ${voted ? "border-blue-300 bg-blue-50 shadow-md" : "border-gray-100 bg-gray-50"}`}>
+                            {voters.length > 0 && (
+                              <div className="flex justify-center gap-0.5 flex-wrap">
+                                {voters.slice(0, 3).map((mid) => <SwingAvatar key={mid} color={(memberColorMap[mid] ?? "orange") as AvatarColor} size={18} swing={false} />)}
+                                {voters.length > 3 && <span className="text-xs text-gray-400 font-bold self-end">+{voters.length - 3}</span>}
+                              </div>
+                            )}
+                            <span className="text-xl">{tag.emoji}</span>
+                            <span className={`text-xs font-extrabold ${voted ? "text-blue-500" : "text-gray-600"}`}>{tag.name}</span>
+                            {voters.length > 0 && <span className="text-xs font-bold text-blue-400">{voters.length}票</span>}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* 予算 */}
+                  <div>
+                    <p className="text-xs font-extrabold text-gray-400 mb-2">💰 予算（1人あたり）</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {BUDGET_TAGS.map((tag) => {
+                        const voters = tagVoteMap[tag.name] ?? [];
+                        const voted = myTagVoteSet.has(tag.name);
+                        return (
+                          <motion.button key={tag.name} onClick={() => handleTagVote(tag.name)} whileTap={{ scale: 0.92 }}
+                            className={`relative rounded-2xl px-2 py-3 flex flex-col items-center gap-1 transition-all border-2 ${voted ? "border-emerald-300 bg-emerald-50 shadow-md" : "border-gray-100 bg-gray-50"}`}>
+                            {voters.length > 0 && (
+                              <div className="flex justify-center gap-0.5 flex-wrap">
+                                {voters.slice(0, 3).map((mid) => <SwingAvatar key={mid} color={(memberColorMap[mid] ?? "orange") as AvatarColor} size={18} swing={false} />)}
+                                {voters.length > 3 && <span className="text-xs text-gray-400 font-bold self-end">+{voters.length - 3}</span>}
+                              </div>
+                            )}
+                            <span className="text-xl">{tag.emoji}</span>
+                            <span className={`text-xs font-extrabold ${voted ? "text-emerald-600" : "text-gray-600"}`}>{tag.name}</span>
+                            {voters.length > 0 && <span className="text-xs font-bold text-emerald-500">{voters.length}票</span>}
+                          </motion.button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
 

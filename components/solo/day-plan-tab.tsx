@@ -130,8 +130,8 @@ export default function DayPlanTab() {
           {plan.timeline.map((slot, i) => (
             <div key={i} className="bg-white/90 backdrop-blur-sm rounded-3xl p-5 shadow-lg">
               <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-extrabold text-sm shadow-sm shrink-0"
-                  style={{ backgroundColor: SLOT_COLORS[i] }}>
+                <div className="w-10 h-10 rounded-2xl flex items-center justify-center text-white font-extrabold shadow-sm shrink-0"
+                  style={{ backgroundColor: SLOT_COLORS[i], fontSize: slot.timeSlot.split(/[\s(]/)[0].length >= 3 ? "11px" : "14px" }}>
                   {slot.timeSlot.split(/[\s(]/)[0]}
                 </div>
                 <div className="min-w-0">
