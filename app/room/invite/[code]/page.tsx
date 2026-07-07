@@ -10,6 +10,7 @@ import SwingAvatar, { AVATAR_COLORS, AvatarColor } from "@/components/ui/swing-a
 import RouletteWheel from "@/components/roulette-wheel";
 import ResultModal from "@/components/result-modal";
 import { Suggestion } from "@/types/planco";
+import { useShakeDetector } from "@/lib/hooks/useShakeDetector";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -79,6 +80,107 @@ const ALL_VOTE_TAGS = [...ACTIVITY_TAGS, ...LOCATION_TAGS, ...BUDGET_TAGS];
 
 const HEART_PARTICLES = ["❤️", "💕", "💗", "✨"];
 
+const SHAKE_GOAL = 80;
+
+const TRAP_CANDIDATE: Candidate = {
+  id: "trap",
+  name: "？？？",
+  description: "運命の選択...",
+  budget: "？",
+  reason: "神のみぞ知る",
+};
+
+// ── Audio helpers ─────────────────────────────────────────────────────────────
+
+let _audioCtx: AudioContext | null = null;
+
+function getAudioCtx(): AudioContext | null {
+  if (typeof window === "undefined") return null;
+  try {
+    if (!_audioCtx) {
+      _audioCtx = new (
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      )();
+    }
+    if (_audioCtx.state === "suspended") _audioCtx.resume();
+    return _audioCtx;
+  } catch {
+    return null;
+  }
+}
+
+function playShakeTick() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+  osc.frequency.setValueAtTime(500 + Math.random() * 300, ctx.currentTime);
+  gain.gain.setValueAtTime(0.1, ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.08);
+  osc.start(ctx.currentTime);
+  osc.stop(ctx.currentTime + 0.08);
+}
+
+function playDrumRoll(durationMs: number) {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const steps = Math.floor(durationMs / 60);
+  for (let i = 0; i < steps; i++) {
+    const t = now + (i / steps) * (durationMs / 1000);
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(60 + (i / steps) * 50, t);
+    const vol = 0.04 + (i / steps) * 0.18;
+    gain.gain.setValueAtTime(vol, t);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + 0.055);
+    osc.start(t);
+    osc.stop(t + 0.055);
+  }
+}
+
+function playAlert() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  for (const [freq, offset] of [[440, 0], [587, 0.22], [784, 0.44]]) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "square";
+    osc.frequency.setValueAtTime(freq, now + offset);
+    gain.gain.setValueAtTime(0.22, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.18);
+    osc.start(now + offset);
+    osc.stop(now + offset + 0.18);
+  }
+}
+
+function playVictoryFanfare() {
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  for (const [freq, offset] of [[523, 0], [659, 0.15], [784, 0.3], [1047, 0.45]]) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = "triangle";
+    osc.frequency.setValueAtTime(freq, now + offset);
+    gain.gain.setValueAtTime(0.32, now + offset);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + offset + 0.35);
+    osc.start(now + offset);
+    osc.stop(now + offset + 0.35);
+  }
+}
+
 // ── Sub-components ───────────────────────────────────────────────────────────
 
 function HeartParticles({ show }: { show: boolean }) {
@@ -141,6 +243,13 @@ export default function InviteRoomPage({
   const [showWinnerModal, setShowWinnerModal] = useState(false);
   const baseRotationRef = useRef(0);
 
+  // Demo: shake charge
+  const [chargeCount, setChargeCount] = useState(0);
+  const [showRainbow, setShowRainbow] = useState(false);
+  const [showDramaticText, setShowDramaticText] = useState(false);
+  const rainbowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const dramaticTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const presenceRef = useRef<RealtimeChannel | null>(null);
   const realtimeRef = useRef<RealtimeChannel | null>(null);
   const broadcastRef = useRef<RealtimeChannel | null>(null);
@@ -181,7 +290,7 @@ export default function InviteRoomPage({
     return map;
   }, [memberRecords]);
 
-  // Top 4 candidates by likes — used as roulette items
+  // Top 4 by likes → roulette base
   const rouletteItems = useMemo(
     () =>
       [...candidates]
@@ -189,6 +298,19 @@ export default function InviteRoomPage({
         .slice(0, 4),
     [candidates, likeCountMap]
   );
+
+  // Always add the trap sector
+  const rouletteItemsWithTrap = useMemo(
+    () => [...rouletteItems, TRAP_CANDIDATE],
+    [rouletteItems]
+  );
+
+  const chargeReady = chargeCount >= SHAKE_GOAL;
+
+  // Dynamic swing animation driven by charge level
+  const chargeRatio = Math.min(chargeCount, SHAKE_GOAL) / SHAKE_GOAL;
+  const swingAngle = 6 + chargeRatio * 164;   // 6° → 170°
+  const swingDuration = Math.max(0.4, 2.5 - chargeRatio * 2.1); // 2.5s → 0.4s
 
   // ── Initial data load ─────────────────────────────────────────────────────
 
@@ -391,7 +513,7 @@ export default function InviteRoomPage({
     return () => { supabase?.removeChannel(channel); };
   }, [roomId]);
 
-  // ── Broadcast channel (roulette spin sync) ────────────────────────────────
+  // ── Broadcast channel ─────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!supabase || !roomId) return;
@@ -401,6 +523,9 @@ export default function InviteRoomPage({
     });
 
     channel
+      .on("broadcast", { event: "SHAKE" }, () => {
+        setChargeCount((c) => Math.min(c + 1, SHAKE_GOAL));
+      })
       .on("broadcast", { event: "SPIN" }, ({ payload }) => {
         const { targetRotation } = payload as { targetRotation: number };
         baseRotationRef.current = targetRotation;
@@ -409,12 +534,42 @@ export default function InviteRoomPage({
         setIsSpinning(true);
         setWinnerCandidate(null);
         setShowWinnerModal(false);
+
+        // Drum roll for first 2.5s
+        playDrumRoll(2500);
+
+        // Dramatic text at 1.5s
+        if (dramaticTimerRef.current) clearTimeout(dramaticTimerRef.current);
+        dramaticTimerRef.current = setTimeout(() => setShowDramaticText(true), 1500);
+
+        // Rainbow flash + alert + vibration at 2.5s (2s before wheel stops)
+        if (rainbowTimerRef.current) clearTimeout(rainbowTimerRef.current);
+        rainbowTimerRef.current = setTimeout(() => {
+          setShowRainbow(true);
+          playAlert();
+          navigator.vibrate?.([200, 100, 200]);
+        }, 2500);
       })
       .subscribe();
 
     broadcastRef.current = channel;
     return () => { supabase?.removeChannel(channel); };
   }, [roomId]);
+
+  // ── Shake detection ───────────────────────────────────────────────────────
+
+  const handleShake = useCallback(() => {
+    if (phase !== "roulette" || isSpinning || chargeCount >= SHAKE_GOAL) return;
+    playShakeTick();
+    broadcastRef.current?.send({
+      type: "broadcast",
+      event: "SHAKE",
+      payload: {},
+    });
+  }, [phase, isSpinning, chargeCount]);
+
+  const { permissionState: motionPermission, requestPermission: requestMotionPermission } =
+    useShakeDetector(handleShake);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -552,52 +707,61 @@ export default function InviteRoomPage({
 
   const handleStartRoulette = async () => {
     if (!supabase || !roomId) return;
-    setPhase("roulette"); // optimistic
+    setPhase("roulette");
     await supabase.from("rooms").update({ status: "roulette" }).eq("id", roomId);
   };
 
   const handleSpin = useCallback(() => {
-    if (isSpinning || rouletteItems.length === 0 || !broadcastRef.current) return;
+    if (isSpinning || rouletteItemsWithTrap.length === 0 || !broadcastRef.current) return;
 
-    const N = rouletteItems.length;
-    const SECTOR_ANGLE = 360 / N;
     const extra = Math.random() * 360;
     const newTarget = baseRotationRef.current + 360 * 7 + extra;
-    const normalized = (360 - (newTarget % 360)) % 360;
-    const winnerIdx = Math.floor(normalized / SECTOR_ANGLE) % N;
-    const winnerName = rouletteItems[winnerIdx].name;
 
     broadcastRef.current.send({
       type: "broadcast",
       event: "SPIN",
-      payload: { targetRotation: newTarget, winnerName, startTime: Date.now() },
+      payload: { targetRotation: newTarget, startTime: Date.now() },
     });
-  }, [isSpinning, rouletteItems]);
+  }, [isSpinning, rouletteItemsWithTrap]);
 
   const handleRouletteComplete = useCallback(
     (winnerName: string) => {
-      const found = rouletteItems.find((c) => c.name === winnerName) ?? null;
+      if (rainbowTimerRef.current) clearTimeout(rainbowTimerRef.current);
+      if (dramaticTimerRef.current) clearTimeout(dramaticTimerRef.current);
+      setShowRainbow(false);
+      setShowDramaticText(false);
+
+      const isTrap = winnerName === "？？？";
+      const found = isTrap
+        ? TRAP_CANDIDATE
+        : (rouletteItems.find((c) => c.name === winnerName) ?? null);
+
       setWinnerCandidate(found);
       setIsSpinning(false);
       if (found) setShowWinnerModal(true);
 
-      // Confetti
-      if (typeof window !== "undefined") {
-        import("canvas-confetti").then(({ default: confetti }) => {
-          confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 } });
-          setTimeout(
-            () => confetti({ particleCount: 80, spread: 120, origin: { y: 0.8, x: 0.1 } }),
-            350
-          );
-          setTimeout(
-            () => confetti({ particleCount: 80, spread: 120, origin: { y: 0.8, x: 0.9 } }),
-            700
-          );
-        });
+      if (isTrap) {
+        navigator.vibrate?.([500, 200, 500, 200, 500]);
+        playAlert();
+      } else {
+        navigator.vibrate?.([200, 100, 400]);
+        playVictoryFanfare();
+        if (typeof window !== "undefined") {
+          import("canvas-confetti").then(({ default: confetti }) => {
+            confetti({ particleCount: 160, spread: 80, origin: { y: 0.6 } });
+            setTimeout(
+              () => confetti({ particleCount: 80, spread: 120, origin: { y: 0.8, x: 0.1 } }),
+              350
+            );
+            setTimeout(
+              () => confetti({ particleCount: 80, spread: 120, origin: { y: 0.8, x: 0.9 } }),
+              700
+            );
+          });
+        }
       }
 
-      // Persist winner to DB
-      if (supabase && roomId && found) {
+      if (supabase && roomId && found && !isTrap) {
         supabase.from("rooms").update({ selected_candidate_id: found.id }).eq("id", roomId);
       }
     },
@@ -694,10 +858,32 @@ export default function InviteRoomPage({
         onReSpin={() => {
           setShowWinnerModal(false);
           setWinnerCandidate(null);
-          if (myIsHost) handleSpin();
+          setChargeCount(0);
         }}
         reSpinLabel="もう一度回す"
+        hideMap={winnerCandidate?.id === "trap"}
       />
+
+      {/* Rainbow flash overlay */}
+      {showRainbow && (
+        <div className="fixed inset-0 z-30 pointer-events-none animate-rainbow" />
+      )}
+
+      {/* Dramatic text overlay */}
+      {showDramaticText && (
+        <div className="fixed inset-0 flex items-center justify-center pointer-events-none px-6" style={{ zIndex: 35 }}>
+          <p
+            className="text-4xl font-extrabold text-yellow-400 text-center animate-pulse drop-shadow-2xl"
+            style={{
+              fontFamily: "serif",
+              textShadow: "0 0 24px rgba(251,191,36,0.9), 0 2px 8px rgba(0,0,0,0.5)",
+              lineHeight: 1.4,
+            }}
+          >
+            ぷらんこ神（しん）の<br />裁きが下る...！
+          </p>
+        </div>
+      )}
 
       <main
         className="min-h-screen pb-10"
@@ -781,7 +967,7 @@ export default function InviteRoomPage({
             )}
           </div>
 
-          {/* ── Phase content ────────────────────────────── */}
+          {/* ── Phase content ──────────────────────────────────────────── */}
           <AnimatePresence mode="wait">
 
             {/* VOTING */}
@@ -988,7 +1174,6 @@ export default function InviteRoomPage({
                   ))}
                 </AnimatePresence>
 
-                {/* Host: start roulette */}
                 {myIsHost && candidates.length > 0 && (
                   <motion.div
                     initial={{ opacity: 0, y: 12 }}
@@ -1021,7 +1206,7 @@ export default function InviteRoomPage({
               >
                 {/* Top items */}
                 <div className="bg-white/30 rounded-2xl px-4 py-3">
-                  <p className="text-white text-xs font-bold mb-2">❤️ いいね上位スポット</p>
+                  <p className="text-white text-xs font-bold mb-2">❤️ いいね上位スポット + 神の手</p>
                   <div className="flex flex-wrap gap-2">
                     {rouletteItems.map((c) => (
                       <span
@@ -1034,63 +1219,162 @@ export default function InviteRoomPage({
                         )}
                       </span>
                     ))}
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-800/70 text-yellow-300">
+                      ？？？ ✨
+                    </span>
                   </div>
                 </div>
 
-                {/* Wheel */}
-                <div className="bg-white/85 backdrop-blur-sm rounded-3xl p-6 shadow-2xl flex flex-col items-center">
-                  {isSpinning && (
-                    <p className="text-xs font-bold text-orange-400 mb-3 animate-pulse">
-                      🎡 ルーレット回転中...
+                {/* ── Power charge sub-phase ── */}
+                {!isSpinning && !winnerCandidate && (
+                  <div className="bg-white/85 backdrop-blur-sm rounded-3xl p-6 shadow-2xl">
+                    <p className="text-center font-extrabold text-gray-800 text-lg mb-1">
+                      ⚡ フリフリパワーをためよう！
                     </p>
-                  )}
-                  <RouletteWheel
-                    items={rouletteItems.map((c) => c.name)}
-                    spinTrigger={spinTrigger}
-                    onComplete={handleRouletteComplete}
-                    syncedTarget={syncedTarget}
-                  />
-                  {winnerCandidate && !isSpinning && (
-                    <div className="mt-5 text-center animate-pop-in">
-                      <p className="text-xs text-gray-400 font-bold tracking-widest">決まりました！</p>
-                      <p className="text-3xl font-extrabold text-orange-500 mt-1">
-                        {winnerCandidate.name} 🎉
-                      </p>
-                    </div>
-                  )}
-                </div>
+                    <p className="text-center text-gray-400 text-xs mb-4">
+                      端末を振るか、タップでパワーチャージ
+                    </p>
 
-                {/* Host: spin / Guest: wait */}
-                {myIsHost ? (
-                  <button
-                    onClick={handleSpin}
-                    disabled={isSpinning}
-                    className="w-full py-4 rounded-2xl font-extrabold text-white text-lg shadow-lg transition-all active:scale-95 disabled:opacity-70"
-                    style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}
-                  >
-                    {isSpinning ? "🌀 回転中..." : winnerCandidate ? "🔄 もう一度回す" : "回す！🎡"}
-                  </button>
-                ) : (
-                  <div className="bg-white/30 rounded-2xl px-5 py-4 text-center">
-                    {isSpinning ? (
-                      <p className="text-white font-extrabold text-base animate-pulse">
-                        🎡 回っています！ドキドキ...
-                      </p>
-                    ) : (
-                      <p className="text-white font-extrabold text-base">
-                        ⏳ ホストが回すのを待っています...
+                    {/* Dynamic swinging avatar */}
+                    <div className="flex justify-center mb-5">
+                      <motion.div
+                        animate={{ rotate: [-swingAngle, swingAngle] }}
+                        transition={{
+                          duration: swingDuration,
+                          repeat: Infinity,
+                          repeatType: "reverse",
+                          ease: "easeInOut",
+                        }}
+                        style={{ transformOrigin: "50% 14%", display: "inline-block" }}
+                      >
+                        <SwingAvatar color={myAvatarColor} size={120} swing={false} />
+                      </motion.div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="mb-4">
+                      <div className="flex justify-between text-xs font-bold text-gray-500 mb-1.5">
+                        <span>フリフリパワー</span>
+                        <span className={chargeReady ? "text-orange-500" : ""}>
+                          {Math.min(chargeCount, SHAKE_GOAL)} / {SHAKE_GOAL}
+                          {chargeReady && " ⚡MAX!"}
+                        </span>
+                      </div>
+                      <div className="h-5 bg-gray-100 rounded-full overflow-hidden">
+                        <motion.div
+                          className="h-full rounded-full"
+                          style={{
+                            background: chargeReady
+                              ? "linear-gradient(90deg, #f59e0b, #ef4444)"
+                              : "linear-gradient(90deg, #FFB5A7, #FEC89A)",
+                          }}
+                          initial={{ width: 0 }}
+                          animate={{ width: `${Math.min(100, (chargeCount / SHAKE_GOAL) * 100)}%` }}
+                          transition={{ duration: 0.15 }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* iOS permission button */}
+                    {motionPermission === "unknown" && (
+                      <button
+                        onClick={requestMotionPermission}
+                        className="w-full mb-3 py-3 rounded-2xl font-bold text-white bg-blue-400 hover:bg-blue-500 transition-all active:scale-95"
+                      >
+                        📱 端末センサーを許可する（iOS）
+                      </button>
+                    )}
+
+                    {/* Tap-to-shake fallback */}
+                    <button
+                      onClick={handleShake}
+                      disabled={chargeReady || isSpinning}
+                      className="w-full py-4 rounded-2xl font-extrabold text-orange-500 bg-orange-50 text-lg transition-all active:scale-95 disabled:opacity-40 mb-3"
+                    >
+                      📳 フリフリする！
+                    </button>
+
+                    {/* Host spin button */}
+                    {myIsHost && (
+                      <button
+                        onClick={handleSpin}
+                        disabled={!chargeReady || isSpinning}
+                        className="w-full py-4 rounded-2xl font-extrabold text-white text-lg shadow-lg transition-all active:scale-95 disabled:opacity-50"
+                        style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}
+                      >
+                        {chargeReady
+                          ? "回す！🎡"
+                          : `あと${SHAKE_GOAL - Math.min(chargeCount, SHAKE_GOAL)}フリフリ...`}
+                      </button>
+                    )}
+
+                    {!myIsHost && (
+                      <p className="text-gray-500 font-bold text-center text-sm mt-1">
+                        {chargeReady
+                          ? "パワーMAX！✨ ホストが回すのを待っています"
+                          : "みんなでフリフリしてパワーをためよう！"}
                       </p>
                     )}
                   </div>
                 )}
 
-                {/* Show result again */}
+                {/* ── Spinning / result wheel ── */}
+                {(isSpinning || winnerCandidate) && (
+                  <div className="bg-white/85 backdrop-blur-sm rounded-3xl p-6 shadow-2xl flex flex-col items-center">
+                    {isSpinning && (
+                      <p className="text-xs font-bold text-orange-400 mb-3 animate-pulse">
+                        🎡 ルーレット回転中...
+                      </p>
+                    )}
+                    <RouletteWheel
+                      items={rouletteItemsWithTrap.map((c) => c.name)}
+                      spinTrigger={spinTrigger}
+                      onComplete={handleRouletteComplete}
+                      syncedTarget={syncedTarget}
+                    />
+                    {winnerCandidate && !isSpinning && (
+                      <div className="mt-5 text-center animate-pop-in">
+                        <p className="text-xs text-gray-400 font-bold tracking-widest">決まりました！</p>
+                        <p className="text-3xl font-extrabold text-orange-500 mt-1">
+                          {winnerCandidate.name} {winnerCandidate.id === "trap" ? "😱" : "🎉"}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Host: re-spin after result */}
+                {myIsHost && winnerCandidate && !isSpinning && (
+                  <button
+                    onClick={() => {
+                      setWinnerCandidate(null);
+                      setChargeCount(0);
+                    }}
+                    className="w-full py-4 rounded-2xl font-extrabold text-white text-lg shadow-lg transition-all active:scale-95"
+                    style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}
+                  >
+                    🔄 もう一度チャレンジ
+                  </button>
+                )}
+
+                {/* Guest: wait during spin */}
+                {!myIsHost && isSpinning && (
+                  <div className="bg-white/30 rounded-2xl px-5 py-4 text-center">
+                    <p className="text-white font-extrabold text-base animate-pulse">
+                      🎡 回っています！ドキドキ...
+                    </p>
+                  </div>
+                )}
+
+                {/* Show result detail button */}
                 {winnerCandidate && !isSpinning && (
                   <button
                     onClick={() => setShowWinnerModal(true)}
                     className="w-full py-4 rounded-2xl font-extrabold text-white text-lg shadow-lg active:scale-95 bg-emerald-400 hover:bg-emerald-500 transition-all"
                   >
-                    詳細を見る・ここに決定！✨
+                    {winnerCandidate.id === "trap"
+                      ? "運命を確認する 😱"
+                      : "詳細を見る・ここに決定！✨"}
                   </button>
                 )}
               </motion.div>
