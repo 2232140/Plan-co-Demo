@@ -890,7 +890,7 @@ export default function InviteRoomPage({
               lineHeight: 1.4,
             }}
           >
-            ぷらんこ神（しん）の<br />裁きが下る...！
+            ぷらんこ神の<br />裁きが下る...！
           </p>
         </div>
       )}
