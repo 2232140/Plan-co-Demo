@@ -550,6 +550,11 @@ export default function InviteRoomPage({
           navigator.vibrate?.([200, 100, 200]);
         }, 2500);
       })
+      .on("broadcast", { event: "RESET" }, () => {
+        setWinnerCandidate(null);
+        setShowWinnerModal(false);
+        setChargeCount(SHAKE_GOAL);
+      })
       .subscribe();
 
     broadcastRef.current = channel;
@@ -856,9 +861,14 @@ export default function InviteRoomPage({
         location=""
         onClose={() => setShowWinnerModal(false)}
         onReSpin={() => {
+          broadcastRef.current?.send({
+            type: "broadcast",
+            event: "RESET",
+            payload: {},
+          });
           setShowWinnerModal(false);
           setWinnerCandidate(null);
-          setChargeCount(0);
+          setChargeCount(SHAKE_GOAL);
         }}
         reSpinLabel="もう一度回す"
         hideMap={winnerCandidate?.id === "trap"}
@@ -1226,7 +1236,7 @@ export default function InviteRoomPage({
                 </div>
 
                 {/* ── Power charge sub-phase ── */}
-                {!isSpinning && !winnerCandidate && (
+                {!isSpinning && !winnerCandidate && chargeCount < SHAKE_GOAL && (
                   <div className="bg-white/85 backdrop-blur-sm rounded-3xl p-6 shadow-2xl">
                     <p className="text-center font-extrabold text-gray-800 text-lg mb-1">
                       ⚡ フリフリパワーをためよう！
@@ -1318,9 +1328,14 @@ export default function InviteRoomPage({
                   </div>
                 )}
 
-                {/* ── Spinning / result wheel ── */}
-                {(isSpinning || winnerCandidate) && (
+                {/* ── Wheel (shown when charged, spinning, or result) ── */}
+                {(isSpinning || winnerCandidate || chargeReady) && (
                   <div className="bg-white/85 backdrop-blur-sm rounded-3xl p-6 shadow-2xl flex flex-col items-center">
+                    {chargeReady && !isSpinning && !winnerCandidate && (
+                      <p className="text-xs font-bold text-orange-400 mb-3">
+                        ⚡ パワーMAX！ホストが回すのを待っています
+                      </p>
+                    )}
                     {isSpinning && (
                       <p className="text-xs font-bold text-orange-400 mb-3 animate-pulse">
                         🎡 ルーレット回転中...
@@ -1343,21 +1358,27 @@ export default function InviteRoomPage({
                   </div>
                 )}
 
-                {/* Host: re-spin after result */}
-                {myIsHost && winnerCandidate && !isSpinning && (
+                {/* Host: spin when charged */}
+                {myIsHost && chargeReady && !isSpinning && !winnerCandidate && (
                   <button
-                    onClick={() => {
-                      setWinnerCandidate(null);
-                      setChargeCount(0);
-                    }}
+                    onClick={handleSpin}
                     className="w-full py-4 rounded-2xl font-extrabold text-white text-lg shadow-lg transition-all active:scale-95"
                     style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}
                   >
-                    🔄 もう一度チャレンジ
+                    回す！🎡
                   </button>
                 )}
 
-                {/* Guest: wait during spin */}
+                {/* Guest: wait when charged */}
+                {!myIsHost && chargeReady && !isSpinning && !winnerCandidate && (
+                  <div className="bg-white/30 rounded-2xl px-5 py-4 text-center">
+                    <p className="text-white font-extrabold text-base">
+                      ⏳ ホストが回すのを待っています...
+                    </p>
+                  </div>
+                )}
+
+                {/* Guest: during spin */}
                 {!myIsHost && isSpinning && (
                   <div className="bg-white/30 rounded-2xl px-5 py-4 text-center">
                     <p className="text-white font-extrabold text-base animate-pulse">
@@ -1366,7 +1387,7 @@ export default function InviteRoomPage({
                   </div>
                 )}
 
-                {/* Show result detail button */}
+                {/* Result detail button */}
                 {winnerCandidate && !isSpinning && (
                   <button
                     onClick={() => setShowWinnerModal(true)}
