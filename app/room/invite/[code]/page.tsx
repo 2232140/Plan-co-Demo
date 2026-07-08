@@ -247,6 +247,8 @@ export default function InviteRoomPage({
   const [chargeCount, setChargeCount] = useState(0);
   const [showRainbow, setShowRainbow] = useState(false);
   const [showDramaticText, setShowDramaticText] = useState(false);
+  const [showTrapModal, setShowTrapModal] = useState(false);
+  const [pendingTrapSpot, setPendingTrapSpot] = useState("");
   const rainbowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dramaticTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -553,7 +555,23 @@ export default function InviteRoomPage({
       .on("broadcast", { event: "RESET" }, () => {
         setWinnerCandidate(null);
         setShowWinnerModal(false);
+        setShowTrapModal(false);
+        setPendingTrapSpot("");
         setChargeCount(SHAKE_GOAL);
+      })
+      .on("broadcast", { event: "TRAP_REVEAL" }, ({ payload }) => {
+        const { spotName } = payload as { spotName: string };
+        setWinnerCandidate({ ...TRAP_CANDIDATE, name: spotName });
+        setShowTrapModal(false);
+        setPendingTrapSpot("");
+        setShowWinnerModal(true);
+        playVictoryFanfare();
+        if (typeof window !== "undefined") {
+          import("canvas-confetti").then(({ default: confetti }) => {
+            confetti({ particleCount: 140, spread: 90, origin: { y: 0.6 },
+              colors: ["#f59e0b", "#ef4444", "#8b5cf6"] });
+          });
+        }
       })
       .subscribe();
 
@@ -716,6 +734,16 @@ export default function InviteRoomPage({
     await supabase.from("rooms").update({ status: "roulette" }).eq("id", roomId);
   };
 
+  const handleTrapReveal = () => {
+    const spotName = pendingTrapSpot.trim();
+    if (!spotName || !broadcastRef.current) return;
+    broadcastRef.current.send({
+      type: "broadcast",
+      event: "TRAP_REVEAL",
+      payload: { spotName },
+    });
+  };
+
   const handleSpin = useCallback(() => {
     if (isSpinning || rouletteItemsWithTrap.length === 0 || !broadcastRef.current) return;
 
@@ -743,12 +771,13 @@ export default function InviteRoomPage({
 
       setWinnerCandidate(found);
       setIsSpinning(false);
-      if (found) setShowWinnerModal(true);
 
       if (isTrap) {
         navigator.vibrate?.([500, 200, 500, 200, 500]);
         playAlert();
+        setShowTrapModal(true);
       } else {
+        if (found) setShowWinnerModal(true);
         navigator.vibrate?.([200, 100, 400]);
         playVictoryFanfare();
         if (typeof window !== "undefined") {
@@ -855,6 +884,64 @@ export default function InviteRoomPage({
         </div>
       )}
 
+      {/* Trap decision modal */}
+      {showTrapModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl"
+          >
+            <div className="text-center mb-5">
+              <p className="text-5xl mb-2">⚡</p>
+              <h2 className="text-xl font-extrabold text-gray-800">ぷらんこ神の裁き</h2>
+              <p className="text-gray-400 text-sm mt-1">？？？が出ました！</p>
+            </div>
+
+            {myIsHost ? (
+              <>
+                <p className="text-sm font-bold text-gray-600 mb-3 text-center">
+                  神として行き先を決めよ！
+                </p>
+                <input
+                  type="text"
+                  value={pendingTrapSpot}
+                  onChange={(e) => setPendingTrapSpot(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleTrapReveal()}
+                  placeholder="行き先を入力..."
+                  maxLength={20}
+                  autoFocus
+                  className="w-full px-4 py-2.5 rounded-2xl border-2 border-yellow-100 bg-yellow-50 text-gray-700 font-bold placeholder:text-gray-300 focus:outline-none focus:border-yellow-400 text-sm mb-4"
+                />
+                <button
+                  onClick={handleTrapReveal}
+                  disabled={!pendingTrapSpot.trim()}
+                  className="w-full py-4 rounded-2xl font-extrabold text-white text-lg shadow-lg transition-all active:scale-95 disabled:opacity-60"
+                  style={{ background: "linear-gradient(135deg, #f59e0b 0%, #ef4444 100%)" }}
+                >
+                  神の裁きを下す！⚡
+                </button>
+              </>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-gray-700 font-extrabold text-base animate-pulse">
+                  ぷらんこ神が行先を決めています...
+                </p>
+                <div className="flex justify-center gap-1.5 mt-4">
+                  {[0, 1, 2].map((i) => (
+                    <span
+                      key={i}
+                      className="w-3 h-3 rounded-full bg-yellow-400 animate-dot-pulse"
+                      style={{ animationDelay: `${i * 0.2}s` }}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
+
       {/* Winner Modal */}
       <ResultModal
         suggestion={showWinnerModal ? (winnerCandidate as unknown as Suggestion) : null}
@@ -871,7 +958,7 @@ export default function InviteRoomPage({
           setChargeCount(SHAKE_GOAL);
         }}
         reSpinLabel="もう一度回す"
-        hideMap={winnerCandidate?.id === "trap"}
+        hideMap={winnerCandidate?.id === "trap" && winnerCandidate?.name === "？？？"}
       />
 
       {/* Rainbow flash overlay */}
@@ -1349,9 +1436,15 @@ export default function InviteRoomPage({
                     />
                     {winnerCandidate && !isSpinning && (
                       <div className="mt-5 text-center animate-pop-in">
-                        <p className="text-xs text-gray-400 font-bold tracking-widest">決まりました！</p>
+                        <p className="text-xs text-gray-400 font-bold tracking-widest">
+                          {winnerCandidate.id === "trap" && winnerCandidate.name === "？？？"
+                            ? "ぷらんこ神が決めています..."
+                            : "決まりました！"}
+                        </p>
                         <p className="text-3xl font-extrabold text-orange-500 mt-1">
-                          {winnerCandidate.name} {winnerCandidate.id === "trap" ? "😱" : "🎉"}
+                          {winnerCandidate.name === "？？？"
+                            ? "⚡ ？？？ ⚡"
+                            : `${winnerCandidate.name} ${winnerCandidate.id === "trap" ? "⚡" : "🎉"}`}
                         </p>
                       </div>
                     )}
