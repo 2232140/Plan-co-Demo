@@ -35,6 +35,7 @@ export default function JoinPage() {
   const [previewColor] = useState<AvatarColor>(
     () => AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)]
   );
+  const [location, setLocation] = useState("");
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [createdRoomId, setCreatedRoomId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -57,6 +58,7 @@ export default function JoinPage() {
         id: roomId,
         invite_code: code,
         status: "setup",
+        location: location.trim() || null,
       });
       if (roomErr) throw new Error("ルームの作成に失敗しました");
 
@@ -74,6 +76,12 @@ export default function JoinPage() {
       sessionStorage.setItem("planco_is_host", "true");
       sessionStorage.setItem("planco_userId", crypto.randomUUID());
       sessionStorage.setItem("planco_memberId", memberData.id);
+
+      // Persist host identity across sessions so the host can return on the same device
+      localStorage.setItem(
+        `planco_host_${code}`,
+        JSON.stringify({ memberId: memberData.id, nickname: nickname.trim(), color })
+      );
 
       setCreatedCode(code);
       setCreatedRoomId(roomId);
@@ -216,6 +224,21 @@ export default function JoinPage() {
 
           {tab === "create" && !createdCode && (
             <>
+              <div>
+                <label className="text-sm font-extrabold text-gray-700 mb-2 block">
+                  📍 会場エリア（任意）
+                </label>
+                <input
+                  type="text"
+                  value={location}
+                  onChange={(e) => setLocation(e.target.value)}
+                  placeholder="例：幕張、渋谷、新宿駅周辺"
+                  maxLength={30}
+                  className="w-full px-4 py-2.5 rounded-2xl border-2 border-orange-100 bg-orange-50 text-gray-700 font-bold placeholder:text-gray-300 placeholder:font-normal focus:outline-none focus:border-orange-300 text-sm"
+                />
+                <p className="text-xs text-gray-400 mt-1">入力するとAIがその周辺のスポットを提案します</p>
+              </div>
+
               <p className="text-gray-500 text-sm text-center">
                 6桁のコードが生成され、友達を招待できます
               </p>

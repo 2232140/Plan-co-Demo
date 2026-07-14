@@ -34,22 +34,38 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: "roomId が必要です" }, { status: 400 });
   }
 
+  const supabase = getSupabase();
+  if (!supabase) {
+    return NextResponse.json({ error: "Supabase が設定されていません" }, { status: 500 });
+  }
+
+  const { data: roomData } = await supabase
+    .from("rooms")
+    .select("location")
+    .eq("id", roomId)
+    .maybeSingle();
+  const roomLocation = (roomData?.location as string | null) ?? null;
+
   const tagText = tags.length > 0
     ? tags.join("、")
     : "楽しい、みんなで、気軽に楽しめる";
+
+  const locationLine = roomLocation
+    ? `会場エリア（必ずこのエリア付近のスポットのみ提案すること）: ${roomLocation}`
+    : "";
 
   const ai = new GoogleGenAI({ apiKey });
 
   const prompt = `
 あなたは日本の遊びスポット提案AIです。
 グループの投票結果をもとに、おすすめのスポット・アクティビティを3〜4件提案してください。
-
+${locationLine}
 グループが選んだ希望（テーマ・エリア・予算など）: ${tagText}
 
 ルール:
 - タグの内容（テーマ・エリア・予算）に合った実在する施設・スポットやアクティビティを提案
 - 予算タグがある場合はその範囲に収まるスポットを優先する
-- エリアタグがある場合はそのエリアに合ったスポットを選ぶ
+${roomLocation ? `- 会場エリア「${roomLocation}」付近のスポットを必ず選ぶこと` : "- エリアタグがある場合はそのエリアに合ったスポットを選ぶ"}
 - "name" は10文字以内の短い名称（例:「猫カフェ」「カラオケ」「映画館」）
 - "budget" は「約○○円」の形式で実際の相場を記載
 - "description" は40文字以内でスポットの特徴を説明
@@ -93,11 +109,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         budget: c.budget,
         reason: c.reason,
       }));
-
-      const supabase = getSupabase();
-      if (!supabase) {
-        return NextResponse.json({ error: "Supabase が設定されていません" }, { status: 500 });
-      }
 
       const { error: insertErr } = await supabase.from("room_candidates").insert(candidates);
       if (insertErr) {

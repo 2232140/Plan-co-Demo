@@ -364,50 +364,83 @@ export default function InviteRoomPage({
       return;
     }
 
-    supabase
-      .from("rooms")
-      .select("id, status, selected_candidate_id")
-      .eq("invite_code", code)
-      .maybeSingle()
-      .then(({ data, error: e }) => {
-        if (e || !data) {
-          setError("ルームが見つかりません");
-          setLoading(false);
-          return;
+    const sb = supabase;
+    const init = async () => {
+      const { data, error: e } = await sb
+        .from("rooms")
+        .select("id, status, selected_candidate_id")
+        .eq("invite_code", code)
+        .maybeSingle();
+
+      if (e || !data) {
+        setError("ルームが見つかりません");
+        setLoading(false);
+        return;
+      }
+
+      const rId = data.id as string;
+      const roomStatus = (data.status as string) ?? "setup";
+      const existingWinnerId = (data.selected_candidate_id as string | null) ?? null;
+      setRoomId(rId);
+      if (roomStatus === "roulette") setPhase("roulette");
+
+      let savedNickname = sessionStorage.getItem("planco_nickname");
+      let savedColor = sessionStorage.getItem("planco_avatar_color") as AvatarColor | null;
+      let savedIsHost = sessionStorage.getItem("planco_is_host") === "true";
+      let savedMemberId = sessionStorage.getItem("planco_memberId");
+      let savedUserId = sessionStorage.getItem("planco_userId");
+      if (!savedUserId) {
+        savedUserId = crypto.randomUUID();
+        sessionStorage.setItem("planco_userId", savedUserId);
+      }
+
+      // If no session data, check localStorage for persistent host identity (survives tab close)
+      if (!savedNickname) {
+        try {
+          const localHostRaw = localStorage.getItem(`planco_host_${code}`);
+          if (localHostRaw) {
+            const { memberId, nickname: localNick, color: localColor } = JSON.parse(localHostRaw) as {
+              memberId: string; nickname: string; color: string;
+            };
+            const { data: memberRow } = await sb
+              .from("room_members")
+              .select("id, is_host")
+              .eq("id", memberId)
+              .maybeSingle();
+            if (memberRow?.is_host) {
+              savedNickname = localNick;
+              savedColor = localColor as AvatarColor;
+              savedIsHost = true;
+              savedMemberId = memberId;
+              sessionStorage.setItem("planco_nickname", localNick);
+              sessionStorage.setItem("planco_avatar_color", localColor);
+              sessionStorage.setItem("planco_is_host", "true");
+              sessionStorage.setItem("planco_memberId", memberId);
+            }
+          }
+        } catch {
+          // ignore localStorage errors
         }
+      }
 
-        const rId = data.id as string;
-        const roomStatus = (data.status as string) ?? "setup";
-        const existingWinnerId = (data.selected_candidate_id as string | null) ?? null;
-        setRoomId(rId);
-        if (roomStatus === "roulette") setPhase("roulette");
+      if (savedMemberId) setMyMemberId(savedMemberId);
 
-        const savedNickname = sessionStorage.getItem("planco_nickname");
-        const savedColor = sessionStorage.getItem("planco_avatar_color") as AvatarColor | null;
-        const savedIsHost = sessionStorage.getItem("planco_is_host") === "true";
-        const savedMemberId = sessionStorage.getItem("planco_memberId");
-        let savedUserId = sessionStorage.getItem("planco_userId");
-        if (!savedUserId) {
-          savedUserId = crypto.randomUUID();
-          sessionStorage.setItem("planco_userId", savedUserId);
-        }
+      if (savedNickname && savedColor) {
+        setMyNickname(savedNickname);
+        setMyAvatarColor(savedColor);
+        setMyIsHost(savedIsHost);
+        setMyUserId(savedUserId);
+        setLoading(false);
+      } else {
+        setMyUserId(savedUserId);
+        setShowNicknameDialog(true);
+        setLoading(false);
+      }
 
-        if (savedMemberId) setMyMemberId(savedMemberId);
+      loadInitialData(rId, roomStatus, existingWinnerId);
+    };
 
-        if (savedNickname && savedColor) {
-          setMyNickname(savedNickname);
-          setMyAvatarColor(savedColor);
-          setMyIsHost(savedIsHost);
-          setMyUserId(savedUserId);
-          setLoading(false);
-        } else {
-          setMyUserId(savedUserId);
-          setShowNicknameDialog(true);
-          setLoading(false);
-        }
-
-        loadInitialData(rId, roomStatus, existingWinnerId);
-      });
+    init();
   }, [code, loadInitialData]);
 
   // ── Presence channel ──────────────────────────────────────────────────────
@@ -558,6 +591,22 @@ export default function InviteRoomPage({
         setShowTrapModal(false);
         setPendingTrapSpot("");
         setChargeCount(SHAKE_GOAL);
+      })
+      .on("broadcast", { event: "FULL_RESET" }, () => {
+        setCandidates([]);
+        setVoteRows([]);
+        setLikeRows([]);
+        setWinnerCandidate(null);
+        setShowWinnerModal(false);
+        setShowTrapModal(false);
+        setPendingTrapSpot("");
+        setPhase("voting");
+        setChargeCount(0);
+        setSyncedTarget(undefined);
+        baseRotationRef.current = 0;
+        setIsSpinning(false);
+        setSuggesting(false);
+        setSuggestError(null);
       })
       .on("broadcast", { event: "TRAP_REVEAL" }, ({ payload }) => {
         const { spotName } = payload as { spotName: string };
@@ -732,6 +781,20 @@ export default function InviteRoomPage({
     if (!supabase || !roomId) return;
     setPhase("roulette");
     await supabase.from("rooms").update({ status: "roulette" }).eq("id", roomId);
+  };
+
+  const handleNewRound = async () => {
+    if (!supabase || !roomId || !myIsHost) return;
+    // Clear FK reference first, then delete candidates (likes cascade)
+    await supabase
+      .from("rooms")
+      .update({ status: "setup", selected_candidate_id: null })
+      .eq("id", roomId);
+    await Promise.all([
+      supabase.from("room_candidates").delete().eq("room_id", roomId),
+      supabase.from("room_votes").delete().eq("room_id", roomId),
+    ]);
+    broadcastRef.current?.send({ type: "broadcast", event: "FULL_RESET", payload: {} });
   };
 
   const handleTrapReveal = () => {
@@ -1489,6 +1552,17 @@ export default function InviteRoomPage({
                     {winnerCandidate.id === "trap"
                       ? "運命を確認する 😱"
                       : "詳細を見る・ここに決定！✨"}
+                  </button>
+                )}
+
+                {/* Host-only: restart with same room code */}
+                {myIsHost && winnerCandidate && !isSpinning && (
+                  <button
+                    onClick={handleNewRound}
+                    className="w-full py-3 rounded-2xl font-bold text-white/90 text-base active:scale-95 transition-all"
+                    style={{ background: "rgba(255,255,255,0.25)" }}
+                  >
+                    🔄 新しいラウンドを始める
                   </button>
                 )}
               </motion.div>
