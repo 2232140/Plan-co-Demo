@@ -47,7 +47,7 @@ interface MemberRecord {
   avatar_color: string;
 }
 
-type Phase = "voting" | "suggesting" | "results" | "roulette";
+type Phase = "voting" | "suggesting" | "results" | "mode-select" | "game-ready" | "game-play" | "roulette";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
@@ -81,6 +81,10 @@ const ALL_VOTE_TAGS = [...ACTIVITY_TAGS, ...LOCATION_TAGS, ...BUDGET_TAGS];
 const HEART_PARTICLES = ["❤️", "💕", "💗", "✨"];
 
 const SHAKE_GOAL = 80;
+
+const GAME_DURATION = 5; // seconds
+const GAME_COUNTDOWN_SEC = 3; // seconds before game starts
+const TARGET_SHAKES_PER_PERSON = 15; // for sync mode 80% threshold
 
 const TRAP_CANDIDATE: Candidate = {
   id: "trap",
@@ -252,9 +256,26 @@ export default function InviteRoomPage({
   const rainbowTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dramaticTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Game feature state
+  const [modeVotes, setModeVotes] = useState<Record<string, 'sync' | 'battle'>>({});
+  const [myModeVote, setMyModeVote] = useState<'sync' | 'battle' | null>(null);
+  const [gameMode, setGameMode] = useState<'sync' | 'battle' | null>(null);
+  const [gameScores, setGameScores] = useState<Record<string, { nickname: string; score: number }>>({});
+  const [myShakeScore, setMyShakeScore] = useState(0);
+  const [gameTimeLeft, setGameTimeLeft] = useState(GAME_DURATION);
+  const [gameCountdown, setGameCountdown] = useState(GAME_COUNTDOWN_SEC);
+  const [gameActive, setGameActive] = useState(false);
+  const [motionReady, setMotionReady] = useState(false);
+  const [gameWinnerInfo, setGameWinnerInfo] = useState<{ nickname: string; memberId: string; candidateName: string } | null>(null);
+  const [coopSyncRate, setCoopSyncRate] = useState(0);
+  const [showBattleBoostBanner, setShowBattleBoostBanner] = useState(false);
+
   const presenceRef = useRef<RealtimeChannel | null>(null);
   const realtimeRef = useRef<RealtimeChannel | null>(null);
   const broadcastRef = useRef<RealtimeChannel | null>(null);
+  const myShakeScoreRef = useRef(0); // ref version for use in intervals
+  const lastShakeMsRef = useRef(0);  // for 150ms cooldown
+  const motionHandlerRef = useRef<((e: DeviceMotionEvent) => void) | null>(null);
 
   const formatCode = (c: string) => `${c.slice(0, 3)} ${c.slice(3)}`;
 
@@ -301,11 +322,23 @@ export default function InviteRoomPage({
     [candidates, likeCountMap]
   );
 
-  // Always add the trap sector
-  const rouletteItemsWithTrap = useMemo(
-    () => [...rouletteItems, TRAP_CANDIDATE],
-    [rouletteItems]
-  );
+  // Add trap sector (conditionally based on game results)
+  const rouletteItemsWithTrap = useMemo(() => {
+    let items = [...rouletteItems];
+
+    if (gameMode === 'battle' && gameWinnerInfo) {
+      const boostItem = items.find(c => c.name === gameWinnerInfo.candidateName);
+      if (boostItem) {
+        items = [boostItem, ...items]; // duplicate → 2x probability
+      }
+    }
+
+    if (gameMode === 'sync' && coopSyncRate >= 80) {
+      return items; // no trap slot
+    }
+
+    return [...items, TRAP_CANDIDATE];
+  }, [rouletteItems, gameMode, gameWinnerInfo, coopSyncRate]);
 
   const chargeReady = chargeCount >= SHAKE_GOAL;
 
@@ -607,6 +640,32 @@ export default function InviteRoomPage({
         setIsSpinning(false);
         setSuggesting(false);
         setSuggestError(null);
+        setModeVotes({});
+        setMyModeVote(null);
+        setGameMode(null);
+        setGameScores({});
+        setMyShakeScore(0);
+        myShakeScoreRef.current = 0;
+        setGameTimeLeft(GAME_DURATION);
+        setGameCountdown(GAME_COUNTDOWN_SEC);
+        setGameActive(false);
+        setMotionReady(false);
+        setGameWinnerInfo(null);
+        setCoopSyncRate(0);
+        setShowBattleBoostBanner(false);
+      })
+      .on("broadcast", { event: "MODE_SELECT_START" }, () => {
+        setPhase("mode-select");
+        setModeVotes({});
+        setMyModeVote(null);
+      })
+      .on("broadcast", { event: "MODE_VOTE" }, ({ payload }) => {
+        const { userId, vote } = payload as { userId: string; vote: 'sync' | 'battle' };
+        setModeVotes(prev => ({ ...prev, [userId]: vote }));
+      })
+      .on("broadcast", { event: "GAME_SCORE_UPDATE" }, ({ payload }) => {
+        const { userId, nickname, score } = payload as { userId: string; nickname: string; score: number };
+        setGameScores(prev => ({ ...prev, [userId]: { nickname, score } }));
       })
       .on("broadcast", { event: "TRAP_REVEAL" }, ({ payload }) => {
         const { spotName } = payload as { spotName: string };
@@ -642,6 +701,127 @@ export default function InviteRoomPage({
 
   const { permissionState: motionPermission, requestPermission: requestMotionPermission } =
     useShakeDetector(handleShake);
+
+  // ── Game useEffects ───────────────────────────────────────────────────────
+
+  // Effect A: Auto-decide mode when all votes are in
+  useEffect(() => {
+    if (phase !== 'mode-select' || members.length === 0) return;
+    if (Object.keys(modeVotes).length < members.length) return;
+
+    const syncCount = Object.values(modeVotes).filter(v => v === 'sync').length;
+    const battleCount = Object.values(modeVotes).filter(v => v === 'battle').length;
+    const decided = battleCount > syncCount ? 'battle' : 'sync';
+    setGameMode(decided);
+    setPhase('game-ready');
+    setGameCountdown(GAME_COUNTDOWN_SEC);
+  }, [modeVotes, members.length, phase]);
+
+  // Effect B: Game-ready countdown → transition to game-play
+  useEffect(() => {
+    if (phase !== 'game-ready') return;
+    if (gameCountdown <= 0) {
+      setPhase('game-play');
+      setGameTimeLeft(GAME_DURATION);
+      setGameActive(true);
+      myShakeScoreRef.current = 0;
+      setMyShakeScore(0);
+      return;
+    }
+    const t = setTimeout(() => setGameCountdown(c => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, gameCountdown]);
+
+  // Effect C: Game-play 5-second timer
+  useEffect(() => {
+    if (phase !== 'game-play' || !gameActive) return;
+    if (gameTimeLeft <= 0) {
+      // Game over — compute results
+      setGameActive(false);
+      if (motionHandlerRef.current) {
+        window.removeEventListener('devicemotion', motionHandlerRef.current);
+        motionHandlerRef.current = null;
+      }
+
+      if (gameMode === 'battle') {
+        // Find winner from gameScores + my own score
+        const allScores = {
+          ...gameScores,
+          [myUserId]: { nickname: myNickname, score: myShakeScoreRef.current },
+        };
+        let winnerUserId = myUserId;
+        let winnerNickname = myNickname;
+        let winnerScore = myShakeScoreRef.current;
+        for (const [uid, { nickname, score }] of Object.entries(allScores)) {
+          if (score > winnerScore) {
+            winnerUserId = uid;
+            winnerNickname = nickname;
+            winnerScore = score;
+          }
+        }
+        // Find winner's most-liked candidate
+        const winnerMember = memberRecords.find(m => m.nickname === winnerNickname);
+        if (winnerMember) {
+          const winnerLikedCandidateId = likeRows
+            .filter(l => l.member_id === winnerMember.id)
+            .map(l => l.candidate_id)[0];
+          const winnerCandidate = rouletteItems.find(c => c.id === winnerLikedCandidateId);
+          if (winnerCandidate) {
+            setGameWinnerInfo({ nickname: winnerNickname, memberId: winnerMember.id, candidateName: winnerCandidate.name });
+            setShowBattleBoostBanner(true);
+            setTimeout(() => setShowBattleBoostBanner(false), 3000);
+          } else {
+            setGameWinnerInfo({ nickname: winnerNickname, memberId: winnerMember?.id ?? '', candidateName: '' });
+          }
+        }
+      } else {
+        // Sync mode — compute sync rate
+        const totalShakes = Object.values(gameScores).reduce((s, v) => s + v.score, 0) + myShakeScoreRef.current;
+        const rate = Math.min(100, Math.round((totalShakes / (members.length * TARGET_SHAKES_PER_PERSON)) * 100));
+        setCoopSyncRate(rate);
+      }
+
+      // Transition to roulette
+      setPhase('roulette');
+      supabase?.from('rooms').update({ status: 'roulette' }).eq('id', roomId ?? '');
+      return;
+    }
+    const t = setTimeout(() => setGameTimeLeft(s => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [phase, gameActive, gameTimeLeft, gameMode, gameScores, myUserId, myNickname, memberRecords, likeRows, rouletteItems, members.length, roomId]);
+
+  // Effect D: Throttled score broadcast (every 400ms during game)
+  useEffect(() => {
+    if (phase !== 'game-play' || !gameActive) return;
+    const iv = setInterval(() => {
+      broadcastRef.current?.send({
+        type: "broadcast",
+        event: "GAME_SCORE_UPDATE",
+        payload: { userId: myUserId, nickname: myNickname, score: myShakeScoreRef.current },
+      });
+    }, 400);
+    return () => clearInterval(iv);
+  }, [phase, gameActive, myUserId, myNickname]);
+
+  // Effect E: DeviceMotion listener during game-play
+  useEffect(() => {
+    if (phase !== 'game-play' || !gameActive || !motionReady) return;
+
+    const handler = (e: DeviceMotionEvent) => {
+      const acc = e.acceleration;
+      if (!acc) return;
+      const mag = Math.max(Math.abs(acc.x ?? 0), Math.abs(acc.y ?? 0), Math.abs(acc.z ?? 0));
+      const now = Date.now();
+      if (mag > 5.0 && now - lastShakeMsRef.current > 150) {
+        lastShakeMsRef.current = now;
+        myShakeScoreRef.current += 1;
+        setMyShakeScore(myShakeScoreRef.current);
+      }
+    };
+    motionHandlerRef.current = handler;
+    window.addEventListener('devicemotion', handler);
+    return () => { window.removeEventListener('devicemotion', handler); motionHandlerRef.current = null; };
+  }, [phase, gameActive, motionReady]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────
 
@@ -777,10 +957,33 @@ export default function InviteRoomPage({
     }
   };
 
-  const handleStartRoulette = async () => {
-    if (!supabase || !roomId) return;
-    setPhase("roulette");
-    await supabase.from("rooms").update({ status: "roulette" }).eq("id", roomId);
+  const handleGoToModeSelect = () => {
+    if (!broadcastRef.current) return;
+    broadcastRef.current.send({ type: "broadcast", event: "MODE_SELECT_START", payload: {} });
+  };
+
+  const handleModeVote = (vote: 'sync' | 'battle') => {
+    if (myModeVote === vote) return; // already voted this
+    setMyModeVote(vote);
+    setModeVotes(prev => ({ ...prev, [myUserId]: vote }));
+    broadcastRef.current?.send({
+      type: "broadcast",
+      event: "MODE_VOTE",
+      payload: { userId: myUserId, vote },
+    });
+  };
+
+  const handleRequestMotionPermission = async () => {
+    if (typeof window === 'undefined') return;
+    const DM = DeviceMotionEvent as unknown as { requestPermission?: () => Promise<string> };
+    if (typeof DM.requestPermission === 'function') {
+      try {
+        const result = await DM.requestPermission();
+        if (result === 'granted') setMotionReady(true);
+      } catch { /* ignore */ }
+    } else {
+      setMotionReady(true); // Android / PC — no permission needed
+    }
   };
 
   const handleNewRound = async () => {
@@ -1045,6 +1248,21 @@ export default function InviteRoomPage({
         </div>
       )}
 
+      {/* Battle boost banner */}
+      {showBattleBoostBanner && gameWinnerInfo && gameWinnerInfo.candidateName && (
+        <motion.div
+          initial={{ opacity: 0, y: -40 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -40 }}
+          className="fixed top-8 left-0 right-0 z-50 flex justify-center px-4"
+        >
+          <div className="bg-red-500 text-white rounded-2xl px-6 py-4 shadow-2xl text-center max-w-sm">
+            <p className="font-extrabold text-lg">⚔️ {gameWinnerInfo.nickname} の勝利！</p>
+            <p className="text-sm mt-1 text-red-100">「{gameWinnerInfo.candidateName}」の当選確率が2倍にアップ！🔥</p>
+          </div>
+        </motion.div>
+      )}
+
       <main
         className="min-h-screen pb-10"
         style={{ background: "linear-gradient(160deg, #FFB5A7 0%, #FEC89A 100%)" }}
@@ -1073,7 +1291,7 @@ export default function InviteRoomPage({
           </header>
 
           {/* Invite code */}
-          {phase !== "roulette" && (
+          {phase !== "roulette" && phase !== "mode-select" && phase !== "game-ready" && phase !== "game-play" && (
             <div className="bg-white rounded-3xl p-5 shadow-2xl mb-5">
               <p className="text-xs font-extrabold text-gray-400 mb-2 text-center tracking-widest uppercase">
                 招待コード
@@ -1341,7 +1559,7 @@ export default function InviteRoomPage({
                     className="space-y-2 pt-2"
                   >
                     <button
-                      onClick={handleStartRoulette}
+                      onClick={handleGoToModeSelect}
                       className="w-full py-4 rounded-2xl font-extrabold text-white text-lg shadow-lg transition-all active:scale-95"
                       style={{ background: "linear-gradient(135deg, #FB923C 0%, #F472B6 100%)" }}
                     >
@@ -1352,6 +1570,237 @@ export default function InviteRoomPage({
                     </p>
                   </motion.div>
                 )}
+              </motion.div>
+            )}
+
+            {/* MODE-SELECT */}
+            {phase === "mode-select" && (
+              <motion.div
+                key="mode-select"
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -16 }}
+                className="space-y-4"
+              >
+                <div className="text-center">
+                  <p className="text-white font-extrabold text-2xl">どっちで行く？🎮</p>
+                  <p className="text-white/70 text-sm mt-1">タップして投票！多数決で決まります</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <motion.button
+                    onClick={() => handleModeVote('sync')}
+                    whileTap={{ scale: 0.95 }}
+                    className={`rounded-3xl p-5 flex flex-col items-center gap-2 transition-all border-4 ${
+                      myModeVote === 'sync'
+                        ? 'border-orange-300 bg-orange-50 shadow-xl'
+                        : 'border-white/30 bg-white/20'
+                    }`}
+                  >
+                    <span className="text-4xl">🤝</span>
+                    <p className={`font-extrabold text-sm leading-tight text-center ${myModeVote === 'sync' ? 'text-orange-600' : 'text-white'}`}>
+                      シンクロ・ルーレット
+                    </p>
+                    <p className={`text-xs text-center ${myModeVote === 'sync' ? 'text-orange-400' : 'text-white/70'}`}>
+                      みんなの心を一つに！
+                    </p>
+                    <motion.p
+                      key={Object.values(modeVotes).filter(v => v === 'sync').length}
+                      animate={{ scale: [1, 1.3, 1] }}
+                      className={`text-3xl font-extrabold ${myModeVote === 'sync' ? 'text-orange-500' : 'text-white'}`}
+                    >
+                      {Object.values(modeVotes).filter(v => v === 'sync').length}人
+                    </motion.p>
+                  </motion.button>
+
+                  <motion.button
+                    onClick={() => handleModeVote('battle')}
+                    whileTap={{ scale: 0.95 }}
+                    className={`rounded-3xl p-5 flex flex-col items-center gap-2 transition-all border-4 ${
+                      myModeVote === 'battle'
+                        ? 'border-red-300 bg-red-50 shadow-xl'
+                        : 'border-white/30 bg-white/20'
+                    }`}
+                  >
+                    <span className="text-4xl">⚔️</span>
+                    <p className={`font-extrabold text-sm leading-tight text-center ${myModeVote === 'battle' ? 'text-red-600' : 'text-white'}`}>
+                      フリフリ・バトル
+                    </p>
+                    <p className={`text-xs text-center ${myModeVote === 'battle' ? 'text-red-400' : 'text-white/70'}`}>
+                      勝者が確率を奪い取る！
+                    </p>
+                    <motion.p
+                      key={Object.values(modeVotes).filter(v => v === 'battle').length}
+                      animate={{ scale: [1, 1.3, 1] }}
+                      className={`text-3xl font-extrabold ${myModeVote === 'battle' ? 'text-red-500' : 'text-white'}`}
+                    >
+                      {Object.values(modeVotes).filter(v => v === 'battle').length}人
+                    </motion.p>
+                  </motion.button>
+                </div>
+
+                <p className="text-center text-white/60 text-sm">
+                  {Object.keys(modeVotes).length} / {members.length} 人 投票済み
+                </p>
+              </motion.div>
+            )}
+
+            {/* GAME-READY */}
+            {phase === "game-ready" && (
+              <motion.div
+                key="game-ready"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-5"
+              >
+                <div className="bg-white/85 backdrop-blur-sm rounded-3xl p-6 shadow-2xl text-center space-y-4">
+                  <p className="text-5xl">{gameMode === 'sync' ? '🤝' : '⚔️'}</p>
+                  <p className="font-extrabold text-gray-800 text-lg">
+                    {gameMode === 'sync' ? 'シンクロ・ルーレット！' : 'フリフリ・バトル！'}
+                  </p>
+                  <p className="text-gray-500 text-sm">
+                    {gameMode === 'sync'
+                      ? 'みんなで一緒にスマホを振ろう！シンクロ率80%でトラップ消滅！'
+                      : '5秒間でいちばん多く振った人の候補地が2倍に！'}
+                  </p>
+
+                  <div className="py-2">
+                    <p className="text-gray-400 text-xs mb-1">ゲームスタートまで</p>
+                    <motion.p
+                      key={gameCountdown}
+                      initial={{ scale: 1.5, opacity: 0 }}
+                      animate={{ scale: 1, opacity: 1 }}
+                      className="text-7xl font-extrabold text-orange-500"
+                    >
+                      {gameCountdown > 0 ? gameCountdown : 'GO!'}
+                    </motion.p>
+                  </div>
+
+                  <button
+                    onClick={handleRequestMotionPermission}
+                    className={`w-full py-4 rounded-2xl font-extrabold text-lg shadow-lg transition-all active:scale-95 ${
+                      motionReady
+                        ? 'bg-green-400 text-white'
+                        : 'text-orange-500 bg-orange-50'
+                    }`}
+                  >
+                    {motionReady ? '✅ 準備完了！' : '📱 スマホを握って準備完了！タップ！'}
+                  </button>
+                </div>
+              </motion.div>
+            )}
+
+            {/* GAME-PLAY */}
+            {phase === "game-play" && (
+              <motion.div
+                key="game-play"
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                {/* Timer */}
+                <div className="text-center">
+                  <motion.p
+                    key={gameTimeLeft}
+                    initial={{ scale: 1.3 }}
+                    animate={{ scale: 1 }}
+                    className="text-8xl font-extrabold text-white drop-shadow-xl"
+                  >
+                    {gameTimeLeft}
+                  </motion.p>
+                  <p className="text-white/70 font-bold">秒</p>
+                </div>
+
+                {/* My score */}
+                <div className="bg-white/85 backdrop-blur-sm rounded-3xl px-6 py-4 shadow-xl text-center">
+                  <p className="text-gray-400 text-xs font-bold mb-1">あなたのフリフリ数</p>
+                  <motion.p
+                    key={myShakeScore}
+                    animate={{ scale: [1, 1.2, 1] }}
+                    transition={{ duration: 0.15 }}
+                    className="text-5xl font-extrabold text-orange-500"
+                  >
+                    {myShakeScore}
+                  </motion.p>
+                  {!motionReady && (
+                    <p className="text-xs text-gray-400 mt-2">端末センサー未許可 — タップしてもカウントされます</p>
+                  )}
+                </div>
+
+                {/* Battle: ranking */}
+                {gameMode === 'battle' && (
+                  <div className="bg-white/85 backdrop-blur-sm rounded-3xl p-4 shadow-xl space-y-2">
+                    <p className="text-gray-500 font-extrabold text-xs text-center mb-2">🏆 リアルタイムランキング</p>
+                    <AnimatePresence>
+                      {[
+                        { userId: myUserId, nickname: myNickname, score: myShakeScore },
+                        ...Object.entries(gameScores)
+                          .filter(([uid]) => uid !== myUserId)
+                          .map(([uid, v]) => ({ userId: uid, nickname: v.nickname, score: v.score })),
+                      ]
+                        .sort((a, b) => b.score - a.score)
+                        .map((entry, rank) => (
+                          <motion.div
+                            key={entry.userId}
+                            layout
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            className={`flex items-center gap-3 px-3 py-2 rounded-2xl ${entry.userId === myUserId ? 'bg-orange-50' : 'bg-gray-50'}`}
+                          >
+                            <span className="text-lg font-extrabold text-gray-400 w-6">{rank + 1}</span>
+                            <p className="flex-1 font-bold text-gray-700 text-sm">{entry.nickname}</p>
+                            <motion.p
+                              key={entry.score}
+                              animate={{ scale: [1, 1.2, 1] }}
+                              transition={{ duration: 0.15 }}
+                              className="font-extrabold text-orange-500"
+                            >
+                              {entry.score}
+                            </motion.p>
+                          </motion.div>
+                        ))}
+                    </AnimatePresence>
+                  </div>
+                )}
+
+                {/* Sync: coop gauge */}
+                {gameMode === 'sync' && (() => {
+                  const totalShakes = Object.values(gameScores).reduce((s, v) => s + v.score, 0) + myShakeScore;
+                  const rate = Math.min(100, Math.round((totalShakes / (members.length * TARGET_SHAKES_PER_PERSON)) * 100));
+                  return (
+                    <div className="bg-white/85 backdrop-blur-sm rounded-3xl p-5 shadow-xl space-y-3">
+                      <div className="flex justify-center">
+                        <motion.div
+                          animate={{ scale: [1, 1.25, 1] }}
+                          transition={{ duration: 1, repeat: Infinity, ease: 'easeInOut' }}
+                          className="text-6xl"
+                        >
+                          💗
+                        </motion.div>
+                      </div>
+                      <p className="text-center text-gray-500 font-bold text-xs">リズムに合わせて振ろう！</p>
+                      <div>
+                        <div className="flex justify-between text-xs font-bold text-gray-500 mb-1.5">
+                          <span>シンクロゲージ</span>
+                          <span className={rate >= 80 ? 'text-orange-500 font-extrabold' : ''}>{rate}%{rate >= 80 ? ' 🎉' : ''}</span>
+                        </div>
+                        <div className="h-5 bg-gray-100 rounded-full overflow-hidden">
+                          <motion.div
+                            className="h-full rounded-full"
+                            style={{ background: rate >= 80 ? 'linear-gradient(90deg,#f59e0b,#ef4444)' : 'linear-gradient(90deg,#FFB5A7,#FEC89A)' }}
+                            animate={{ width: `${rate}%` }}
+                            transition={{ duration: 0.3 }}
+                          />
+                        </div>
+                      </div>
+                      <p className="text-center text-gray-400 text-xs">
+                        合計 {totalShakes} フリフリ / 目標 {members.length * TARGET_SHAKES_PER_PERSON}
+                      </p>
+                    </div>
+                  );
+                })()}
               </motion.div>
             )}
 
