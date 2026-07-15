@@ -784,6 +784,7 @@ export default function InviteRoomPage({
       setCoopSyncRate(rate);
     }
 
+    setChargeCount(SHAKE_GOAL); // game already happened — skip charge screen
     setPhase('roulette');
     supabase?.from('rooms').update({ status: 'roulette' }).eq('id', roomId ?? '');
   // eslint-disable-next-line react-hooks/exhaustive-deps
