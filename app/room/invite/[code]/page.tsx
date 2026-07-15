@@ -1836,6 +1836,26 @@ export default function InviteRoomPage({
                 exit={{ opacity: 0 }}
                 className="space-y-4"
               >
+                {/* Sync-mode high result card */}
+                {gameMode === 'sync' && coopSyncRate >= 80 && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.92 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="rounded-3xl p-5 shadow-xl text-center space-y-2"
+                    style={{ background: "linear-gradient(135deg, #fff7ed 0%, #fff0f0 100%)" }}
+                  >
+                    <p className="text-orange-400 text-xs font-bold tracking-widest">RESULT</p>
+                    <p className="text-2xl font-extrabold text-orange-500">シンクロ率 {coopSyncRate}%！🎉</p>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      みんなのリズムがバッチリ合った！<br />
+                      トラップを撃破！ご褒美ルーレット、スタート！✨
+                    </p>
+                    <p className="text-orange-500 font-extrabold text-sm pt-1">
+                      🏆 シンクロ成功！トラップ消滅でラッキー枠ゲット！
+                    </p>
+                  </motion.div>
+                )}
+
                 {/* Sync-mode low result card */}
                 {gameMode === 'sync' && coopSyncRate > 0 && coopSyncRate < 80 && (
                   <motion.div
