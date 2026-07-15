@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { GitFork, ExternalLink } from "lucide-react";
+import { GitFork, ExternalLink, Mail, ArrowLeft } from "lucide-react";
+import Link from "next/link";
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 20 },
@@ -15,10 +16,18 @@ export default function AboutPage() {
       className="min-h-screen"
       style={{ background: "linear-gradient(160deg, #FFB5A7 0%, #FEC89A 100%)" }}
     >
-      <div className="max-w-md mx-auto px-4 pt-10 pb-16 space-y-6">
+      <div className="max-w-md mx-auto px-4 pt-6 pb-16 space-y-6">
+
+        {/* Back button */}
+        <motion.div {...fadeUp(0)}>
+          <Link href="/guide" className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-white/30 hover:bg-white/50 transition-colors active:scale-95">
+            <ArrowLeft size={16} className="text-white" />
+            <span className="text-white font-bold text-sm">使い方に戻る</span>
+          </Link>
+        </motion.div>
 
         {/* Hero */}
-        <motion.div {...fadeUp(0)} className="text-center py-4">
+        <motion.div {...fadeUp(0.05)} className="text-center py-2">
           <div className="text-6xl mb-3 inline-block">👩‍💻</div>
           <h1 className="text-3xl font-extrabold text-white drop-shadow-lg">製作者について</h1>
           <p className="text-white/80 text-xs mt-2">Plan-co を作った人</p>
@@ -68,9 +77,24 @@ export default function AboutPage() {
         <motion.div {...fadeUp(0.2)} className="bg-white/90 rounded-3xl p-5 shadow-xl">
           <div className="flex items-center gap-2 mb-4">
             <span className="text-xl">🔗</span>
-            <h2 className="text-base font-extrabold text-gray-800">リンク</h2>
+            <h2 className="text-base font-extrabold text-gray-800">連絡先 / リンク</h2>
           </div>
           <div className="space-y-3">
+            <a
+              href="mailto:s2232140mp@chibatech.ac.jp"
+              className="flex items-center gap-3 p-3 rounded-2xl border border-gray-100 hover:bg-gray-50 transition-colors active:scale-95"
+            >
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "linear-gradient(135deg, #FFB5A7, #FEC89A)" }}>
+                <Mail size={18} className="text-white" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="font-bold text-gray-700 text-sm">メール</p>
+                <p className="text-gray-400 text-xs truncate">s2232140mp@chibatech.ac.jp</p>
+              </div>
+              <ExternalLink size={14} className="text-gray-300 shrink-0" />
+            </a>
+
             <a
               href="https://github.com/2232140"
               target="_blank"
@@ -84,7 +108,7 @@ export default function AboutPage() {
                 <p className="font-bold text-gray-700 text-sm">GitHub</p>
                 <p className="text-gray-400 text-xs">@2232140</p>
               </div>
-              <ExternalLink size={14} className="text-gray-300" />
+              <ExternalLink size={14} className="text-gray-300 shrink-0" />
             </a>
           </div>
         </motion.div>
