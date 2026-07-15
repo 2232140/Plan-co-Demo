@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, History } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import LocationTab from "@/components/solo/location-tab";
 import DayPlanTab  from "@/components/solo/day-plan-tab";
 import AIChatTab   from "@/components/solo/ai-chat-tab";
@@ -62,10 +62,7 @@ export default function SoloPage() {
             <h1 className="flex-1 text-center text-xl font-extrabold text-white drop-shadow-md">
               Plan-co 🎢
             </h1>
-            <button onClick={() => router.push("/history")}
-              className="p-2 rounded-full bg-white/30 hover:bg-white/50 transition-colors active:scale-95">
-              <History size={20} className="text-white" />
-            </button>
+            <div className="w-9" />
           </div>
 
           {/* Tab bar */}
