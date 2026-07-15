@@ -83,7 +83,7 @@ const HEART_PARTICLES = ["❤️", "💕", "💗", "✨"];
 const SHAKE_GOAL = 80;
 
 const GAME_DURATION = 5; // seconds
-const GAME_COUNTDOWN_SEC = 3; // seconds before game starts
+const GAME_COUNTDOWN_SEC = 10; // seconds before game starts
 const TARGET_SHAKES_PER_PERSON = 15; // for sync mode 80% threshold
 
 const TRAP_CANDIDATE: Candidate = {
@@ -732,63 +732,62 @@ export default function InviteRoomPage({
     return () => clearTimeout(t);
   }, [phase, gameCountdown]);
 
-  // Effect C: Game-play 5-second timer
+  // Effect C: Game-play 5-second countdown timer (minimal deps — no gameScores!)
   useEffect(() => {
     if (phase !== 'game-play' || !gameActive) return;
-    if (gameTimeLeft <= 0) {
-      // Game over — compute results
-      setGameActive(false);
-      if (motionHandlerRef.current) {
-        window.removeEventListener('devicemotion', motionHandlerRef.current);
-        motionHandlerRef.current = null;
-      }
+    const iv = setInterval(() => {
+      setGameTimeLeft(s => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [phase, gameActive]);
 
-      if (gameMode === 'battle') {
-        // Find winner from gameScores + my own score
-        const allScores = {
-          ...gameScores,
-          [myUserId]: { nickname: myNickname, score: myShakeScoreRef.current },
-        };
-        let winnerUserId = myUserId;
-        let winnerNickname = myNickname;
-        let winnerScore = myShakeScoreRef.current;
-        for (const [uid, { nickname, score }] of Object.entries(allScores)) {
-          if (score > winnerScore) {
-            winnerUserId = uid;
-            winnerNickname = nickname;
-            winnerScore = score;
-          }
-        }
-        // Find winner's most-liked candidate
-        const winnerMember = memberRecords.find(m => m.nickname === winnerNickname);
-        if (winnerMember) {
-          const winnerLikedCandidateId = likeRows
-            .filter(l => l.member_id === winnerMember.id)
-            .map(l => l.candidate_id)[0];
-          const winnerCandidate = rouletteItems.find(c => c.id === winnerLikedCandidateId);
-          if (winnerCandidate) {
-            setGameWinnerInfo({ nickname: winnerNickname, memberId: winnerMember.id, candidateName: winnerCandidate.name });
-            setShowBattleBoostBanner(true);
-            setTimeout(() => setShowBattleBoostBanner(false), 3000);
-          } else {
-            setGameWinnerInfo({ nickname: winnerNickname, memberId: winnerMember?.id ?? '', candidateName: '' });
-          }
-        }
-      } else {
-        // Sync mode — compute sync rate
-        const totalShakes = Object.values(gameScores).reduce((s, v) => s + v.score, 0) + myShakeScoreRef.current;
-        const rate = Math.min(100, Math.round((totalShakes / (members.length * TARGET_SHAKES_PER_PERSON)) * 100));
-        setCoopSyncRate(rate);
-      }
+  // Effect C2: Game-over when timer hits 0
+  useEffect(() => {
+    if (phase !== 'game-play' || gameTimeLeft > 0) return;
 
-      // Transition to roulette
-      setPhase('roulette');
-      supabase?.from('rooms').update({ status: 'roulette' }).eq('id', roomId ?? '');
-      return;
+    setGameActive(false);
+    if (motionHandlerRef.current) {
+      window.removeEventListener('devicemotion', motionHandlerRef.current);
+      motionHandlerRef.current = null;
     }
-    const t = setTimeout(() => setGameTimeLeft(s => s - 1), 1000);
-    return () => clearTimeout(t);
-  }, [phase, gameActive, gameTimeLeft, gameMode, gameScores, myUserId, myNickname, memberRecords, likeRows, rouletteItems, members.length, roomId]);
+
+    if (gameMode === 'battle') {
+      const allScores = {
+        ...gameScores,
+        [myUserId]: { nickname: myNickname, score: myShakeScoreRef.current },
+      };
+      let winnerNickname = myNickname;
+      let winnerScore = myShakeScoreRef.current;
+      for (const [, { nickname, score }] of Object.entries(allScores)) {
+        if (score > winnerScore) {
+          winnerNickname = nickname;
+          winnerScore = score;
+        }
+      }
+      const winnerMember = memberRecords.find(m => m.nickname === winnerNickname);
+      if (winnerMember) {
+        const winnerLikedCandidateId = likeRows
+          .filter(l => l.member_id === winnerMember.id)
+          .map(l => l.candidate_id)[0];
+        const winnerCandidate = rouletteItems.find(c => c.id === winnerLikedCandidateId);
+        if (winnerCandidate) {
+          setGameWinnerInfo({ nickname: winnerNickname, memberId: winnerMember.id, candidateName: winnerCandidate.name });
+          setShowBattleBoostBanner(true);
+          setTimeout(() => setShowBattleBoostBanner(false), 3000);
+        } else {
+          setGameWinnerInfo({ nickname: winnerNickname, memberId: winnerMember.id, candidateName: '' });
+        }
+      }
+    } else {
+      const totalShakes = Object.values(gameScores).reduce((s, v) => s + v.score, 0) + myShakeScoreRef.current;
+      const rate = Math.min(100, Math.round((totalShakes / (members.length * TARGET_SHAKES_PER_PERSON)) * 100));
+      setCoopSyncRate(rate);
+    }
+
+    setPhase('roulette');
+    supabase?.from('rooms').update({ status: 'roulette' }).eq('id', roomId ?? '');
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, gameTimeLeft]);
 
   // Effect D: Throttled score broadcast (every 400ms during game)
   useEffect(() => {
@@ -1713,21 +1712,29 @@ export default function InviteRoomPage({
                   <p className="text-white/70 font-bold">秒</p>
                 </div>
 
-                {/* My score */}
-                <div className="bg-white/85 backdrop-blur-sm rounded-3xl px-6 py-4 shadow-xl text-center">
-                  <p className="text-gray-400 text-xs font-bold mb-1">あなたのフリフリ数</p>
+                {/* My score + tap button */}
+                <button
+                  onPointerDown={() => {
+                    const now = Date.now();
+                    if (now - lastShakeMsRef.current > 150) {
+                      lastShakeMsRef.current = now;
+                      myShakeScoreRef.current += 1;
+                      setMyShakeScore(myShakeScoreRef.current);
+                    }
+                  }}
+                  className="w-full bg-white/85 backdrop-blur-sm rounded-3xl px-6 py-6 shadow-xl text-center active:scale-95 transition-transform select-none"
+                >
+                  <p className="text-gray-400 text-xs font-bold mb-1">あなたのフリフリ数（タップでもOK！）</p>
                   <motion.p
                     key={myShakeScore}
-                    animate={{ scale: [1, 1.2, 1] }}
-                    transition={{ duration: 0.15 }}
-                    className="text-5xl font-extrabold text-orange-500"
+                    animate={{ scale: [1, 1.25, 1] }}
+                    transition={{ duration: 0.12 }}
+                    className="text-6xl font-extrabold text-orange-500"
                   >
                     {myShakeScore}
                   </motion.p>
-                  {!motionReady && (
-                    <p className="text-xs text-gray-400 mt-2">端末センサー未許可 — タップしてもカウントされます</p>
-                  )}
-                </div>
+                  <p className="text-xs text-gray-400 mt-2">📳 振る or タップ！</p>
+                </button>
 
                 {/* Battle: ranking */}
                 {gameMode === 'battle' && (
