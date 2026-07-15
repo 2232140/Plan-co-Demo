@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Link from "next/link";
 
 const fadeUp = (delay = 0) => ({
   initial: { opacity: 0, y: 20 },
@@ -216,6 +217,23 @@ export default function GuidePage() {
               </div>
             </div>
           </div>
+        </motion.div>
+
+        {/* About */}
+        <motion.div {...fadeUp(0.38)}>
+          <Link href="/guide/about">
+            <div className="bg-white/90 rounded-3xl p-5 shadow-xl flex items-center gap-4 active:scale-95 transition-transform">
+              <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl shrink-0"
+                style={{ background: "linear-gradient(135deg, #FFB5A7 0%, #FEC89A 100%)" }}>
+                👩‍💻
+              </div>
+              <div className="flex-1">
+                <p className="font-extrabold text-gray-800">製作者について</p>
+                <p className="text-gray-400 text-xs mt-0.5">古澤美波 / 千葉工業大学大学院</p>
+              </div>
+              <span className="text-gray-300 text-lg">›</span>
+            </div>
+          </Link>
         </motion.div>
 
         {/* Footer */}
