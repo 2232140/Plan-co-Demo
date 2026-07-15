@@ -82,7 +82,7 @@ const HEART_PARTICLES = ["❤️", "💕", "💗", "✨"];
 
 const SHAKE_GOAL = 80;
 
-const GAME_DURATION = 5; // seconds
+const GAME_DURATION = 10; // seconds
 const GAME_COUNTDOWN_SEC = 10; // seconds before game starts
 const TARGET_SHAKES_PER_PERSON = 15; // for sync mode 80% threshold
 
@@ -1700,6 +1700,21 @@ export default function InviteRoomPage({
                 exit={{ opacity: 0 }}
                 className="space-y-4"
               >
+                {/* How-to banner */}
+                <div className="bg-white/85 backdrop-blur-sm rounded-2xl px-4 py-3 text-center shadow-lg">
+                  {gameMode === 'sync' ? (
+                    <>
+                      <p className="font-extrabold text-orange-500 text-sm">🤝 みんなで一緒にスマホを振ろう！</p>
+                      <p className="text-gray-500 text-xs mt-0.5">シンクロ率80%以上でトラップ消滅✨　端末を振る or タップで加速！</p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="font-extrabold text-red-500 text-sm">⚔️ いちばん多く振った人が勝者！</p>
+                      <p className="text-gray-500 text-xs mt-0.5">勝者のスポットがルーレットで2倍に✨　端末を振る or タップで加速！</p>
+                    </>
+                  )}
+                </div>
+
                 {/* Timer */}
                 <div className="text-center">
                   <motion.p
@@ -1821,6 +1836,25 @@ export default function InviteRoomPage({
                 exit={{ opacity: 0 }}
                 className="space-y-4"
               >
+                {/* Sync-mode low result card */}
+                {gameMode === 'sync' && coopSyncRate > 0 && coopSyncRate < 80 && (
+                  <motion.div
+                    initial={{ opacity: 0, scale: 0.92 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    className="bg-white/85 backdrop-blur-sm rounded-3xl p-5 shadow-xl text-center space-y-2"
+                  >
+                    <p className="text-gray-400 text-xs font-bold tracking-widest">RESULT</p>
+                    <p className="text-2xl font-extrabold text-gray-800">おや…？ シンクロ率 {coopSyncRate}%</p>
+                    <p className="text-gray-600 text-sm leading-relaxed">
+                      お互いの個性が大爆発！リズムがちょっぴり噛み合わなかったようです。<br />
+                      だが、おでかけとは互いの違いを楽しむ旅でもある…！
+                    </p>
+                    <p className="text-orange-500 font-extrabold text-sm pt-1">
+                      カオスな運命を受け入れよ！予測不能のルーレット、スタート！
+                    </p>
+                  </motion.div>
+                )}
+
                 {/* Top items */}
                 <div className="bg-white/30 rounded-2xl px-4 py-3">
                   <p className="text-white text-xs font-bold mb-2">❤️ いいね上位スポット + 神の手</p>
