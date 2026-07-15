@@ -1,4 +1,4 @@
-import { GoogleGenAI, Content } from "@google/genai";
+import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 
 const PLACE_SYSTEM_INSTRUCTION = `
@@ -56,13 +56,15 @@ const PLAN_SYSTEM_INSTRUCTION = `
 返すのはJSONのみ。それ以外の文字は一切含めないこと。
 `;
 
+type HistoryEntry = { role: "user" | "assistant"; content: string };
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "GEMINI_API_KEY が設定されていません" }, { status: 500 });
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY が設定されていません" }, { status: 500 });
   }
 
-  let body: { history?: Content[]; message: string; chatMode?: "place" | "plan" };
+  let body: { history?: HistoryEntry[]; message: string; chatMode?: "place" | "plan" };
   try {
     body = await request.json();
   } catch {
@@ -70,20 +72,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const { history, message, chatMode = "place" } = body;
-  const systemInstruction = chatMode === "plan" ? PLAN_SYSTEM_INSTRUCTION : PLACE_SYSTEM_INSTRUCTION;
+  const system = chatMode === "plan" ? PLAN_SYSTEM_INSTRUCTION : PLACE_SYSTEM_INSTRUCTION;
 
-  const ai = new GoogleGenAI({ apiKey });
+  const client = new Anthropic({ apiKey });
+  const messages: Anthropic.MessageParam[] = [
+    ...(history ?? []),
+    { role: "user", content: message },
+  ];
 
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const chat = ai.chats.create({
-        model: "gemini-2.5-flash",
-        config: { systemInstruction },
-        history: history ?? [],
+      const response = await client.messages.create({
+        model: "claude-opus-4-7",
+        max_tokens: 1024,
+        system,
+        messages,
       });
-      const response = await chat.sendMessage({ message });
-      const text = response.text ?? "";
+      const text = response.content[0].type === "text" ? response.content[0].text : "";
       return NextResponse.json({ text });
     } catch (err) {
       lastError = err;

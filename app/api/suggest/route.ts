@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { Suggestion } from "@/types/planco";
 
@@ -67,10 +67,19 @@ function buildWeatherRules(weather: WeatherData): string {
   return `\n\n【環境最適化ルール（必ず守ること）】\n${rules.map((r, i) => `${i + 1}. ${r}`).join("\n")}`;
 }
 
+function extractJson(text: string): string | null {
+  const t = text.trim();
+  if (t.startsWith("{")) return t;
+  const block = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (block) return block[1].trim();
+  const idx = t.indexOf("{");
+  return idx !== -1 ? t.slice(idx) : null;
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "GEMINI_API_KEY が設定されていません" }, { status: 500 });
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY が設定されていません" }, { status: 500 });
   }
 
   let body;
@@ -89,7 +98,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     lon?: number;
   };
 
-  // 天気データ取得（座標がある場合のみ）
   let weatherRules = "";
   if (typeof lat === "number" && typeof lon === "number") {
     const weather = await fetchWeather(lat, lon);
@@ -98,7 +106,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  const ai = new GoogleGenAI({ apiKey });
+  const client = new Anthropic({ apiKey });
 
   const prompt = `
 あなたは日本の遊びスポット提案AIです。
@@ -133,13 +141,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 `;
 
   try {
-    const result = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: prompt,
-      config: { responseMimeType: "application/json" },
+    const response = await client.messages.create({
+      model: "claude-opus-4-7",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
     });
-    const text = result.text ?? "";
-    const data = JSON.parse(text) as { suggestions: Suggestion[] };
+
+    const raw = response.content[0].type === "text" ? response.content[0].text : "";
+    const jsonStr = extractJson(raw) ?? raw;
+    const data = JSON.parse(jsonStr) as { suggestions: Suggestion[] };
 
     if (!Array.isArray(data.suggestions) || data.suggestions.length === 0) {
       throw new Error("不正なレスポンス形式");
@@ -153,7 +163,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json(data);
   } catch (err) {
-    console.error("Gemini API error:", err);
+    console.error("Claude API error:", err);
     const is429 = (err as { status?: number })?.status === 429;
     return NextResponse.json(
       { error: is429 ? "AIの1日の利用上限に達しました。時間をおいてから再度お試しください🙏" : "AI提案の生成に失敗しました。しばらく経ってから再試行してください。" },

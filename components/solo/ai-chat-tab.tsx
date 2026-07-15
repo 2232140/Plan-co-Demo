@@ -9,7 +9,7 @@ import { Suggestion, DayPlan, DayPlanSlot } from "@/types/planco";
 interface TextMessage { role: "user" | "ai"; text: string; }
 interface PlanMessage { role: "plan-result"; plan: DayPlan; }
 type Message = TextMessage | PlanMessage;
-type HistoryEntry = { role: "user" | "model"; parts: [{ text: string }] };
+type HistoryEntry = { role: "user" | "assistant"; content: string };
 type ChatMode = "initial" | "place" | "plan";
 
 const SLOT_COLORS = ["#FFB5A7", "#B5EAD7", "#C7CEEA"];
@@ -106,7 +106,7 @@ export default function AIChatTab() {
     const userMsg: TextMessage = { role: "user", text };
     setMessages((p) => [...p, userMsg]);
     setIsLoading(true);
-    const newHistory: HistoryEntry[] = [...history, { role: "user", parts: [{ text }] }];
+    const newHistory: HistoryEntry[] = [...history, { role: "user", content: text }];
     let aiText: string | null = null;
     for (let attempt = 0; attempt < 2; attempt++) {
       try {
@@ -144,7 +144,7 @@ export default function AIChatTab() {
           setMessages((p) => [...p, { role: "ai", text: aiText! }]);
         }
       }
-      setHistory([...newHistory, { role: "model", parts: [{ text: aiText }] }]);
+      setHistory([...newHistory, { role: "assistant", content: aiText }]);
     } catch {
       setMessages((p) => [...p, { role: "ai", text: "ごめんね、うまく返事できなかった💦 もう一度試してみて！" }]);
     } finally {

@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 
 export interface DayPlanSlot {
@@ -35,9 +35,9 @@ function getSlotConfig(departure: string): { labels: [string, string, string]; t
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey)
-    return NextResponse.json({ error: "GEMINI_API_KEY が設定されていません" }, { status: 500 });
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY が設定されていません" }, { status: 500 });
 
   let body: { location?: string; budget?: string; theme?: string; departureTime?: string; people?: string };
   try {
@@ -64,16 +64,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
 {"title":"20文字以内のタイトル","totalBudget":"総予算目安","timeline":[{"timeSlot":"${labels[0]} (${times[0]}〜)","spotName":"15文字以内","description":"60文字以内","duration":"滞在時間目安"},{"timeSlot":"${labels[1]} (${times[1]}〜)","spotName":"15文字以内","description":"60文字以内","duration":"滞在時間目安"},{"timeSlot":"${labels[2]} (${times[2]}〜)","spotName":"15文字以内","description":"60文字以内","duration":"滞在時間目安"}],"extraSpots":[{"spotName":"10文字以内","category":"カテゴリ","description":"40文字以内"},{"spotName":"10文字以内","category":"カテゴリ","description":"40文字以内"},{"spotName":"10文字以内","category":"カテゴリ","description":"40文字以内"}]}`;
 
-  const ai = new GoogleGenAI({ apiKey });
+  const client = new Anthropic({ apiKey });
   let lastError: unknown;
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const res = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      const response = await client.messages.create({
+        model: "claude-opus-4-7",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: prompt }],
       });
-      const raw = res.text ?? "";
+      const raw = response.content[0].type === "text" ? response.content[0].text : "";
       const jsonStr = extractJson(raw);
       if (!jsonStr) throw new Error("JSON not found in response");
       const data = JSON.parse(jsonStr) as DayPlan;

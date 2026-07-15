@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+import Anthropic from "@anthropic-ai/sdk";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
@@ -16,10 +16,19 @@ function getSupabase() {
   return createClient(url, key);
 }
 
+function extractJson(text: string): string | null {
+  const t = text.trim();
+  if (t.startsWith("{")) return t;
+  const block = t.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+  if (block) return block[1].trim();
+  const idx = t.indexOf("{");
+  return idx !== -1 ? t.slice(idx) : null;
+}
+
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return NextResponse.json({ error: "GEMINI_API_KEY が設定されていません" }, { status: 500 });
+    return NextResponse.json({ error: "ANTHROPIC_API_KEY が設定されていません" }, { status: 500 });
   }
 
   let body;
@@ -54,7 +63,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     ? `会場エリア（必ずこのエリア付近のスポットのみ提案すること）: ${roomLocation}`
     : "";
 
-  const ai = new GoogleGenAI({ apiKey });
+  const client = new Anthropic({ apiKey });
 
   const prompt = `
 あなたは日本の遊びスポット提案AIです。
@@ -89,14 +98,15 @@ ${roomLocation ? `- 会場エリア「${roomLocation}」付近のスポットを
   let lastError: unknown;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const result = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: prompt,
-        config: { responseMimeType: "application/json" },
+      const response = await client.messages.create({
+        model: "claude-opus-4-7",
+        max_tokens: 1024,
+        messages: [{ role: "user", content: prompt }],
       });
 
-      const text = result.text ?? "";
-      const data = JSON.parse(text) as { candidates: CandidateResult[] };
+      const raw = response.content[0].type === "text" ? response.content[0].text : "";
+      const jsonStr = extractJson(raw) ?? raw;
+      const data = JSON.parse(jsonStr) as { candidates: CandidateResult[] };
 
       if (!Array.isArray(data.candidates) || data.candidates.length === 0) {
         throw new Error("不正なレスポンス形式");

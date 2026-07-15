@@ -4,13 +4,14 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Send, Loader2, Sparkles } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Content } from "@google/genai";
 import { Suggestion } from "@/types/planco";
 
 interface Message {
   role: "user" | "ai";
   text: string;
 }
+
+type HistoryEntry = { role: "user" | "assistant"; content: string };
 
 const INITIAL_MESSAGE: Message = {
   role: "ai",
@@ -49,7 +50,7 @@ function parseSuggestions(text: string): Suggestion[] | null {
 export default function ChatPage() {
   const router = useRouter();
   const [messages, setMessages] = useState<Message[]>([INITIAL_MESSAGE]);
-  const [history, setHistory] = useState<Content[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
@@ -68,9 +69,9 @@ export default function ChatPage() {
     setMessages((prev) => [...prev, userMessage]);
     setIsLoading(true);
 
-    const newHistory: Content[] = [
+    const newHistory: HistoryEntry[] = [
       ...history,
-      { role: "user", parts: [{ text }] },
+      { role: "user", content: text },
     ];
 
     try {
@@ -92,13 +93,13 @@ export default function ChatPage() {
         ]);
         setHistory([
           ...newHistory,
-          { role: "model", parts: [{ text: aiText }] },
+          { role: "assistant", content: aiText },
         ]);
       } else {
         setMessages((prev) => [...prev, { role: "ai", text: aiText }]);
         setHistory([
           ...newHistory,
-          { role: "model", parts: [{ text: aiText }] },
+          { role: "assistant", content: aiText },
         ]);
       }
     } catch {
