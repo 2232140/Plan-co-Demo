@@ -95,6 +95,17 @@ export default function AboutPage() {
               <ExternalLink size={14} className="text-gray-300 shrink-0" />
             </a>
 
+            <div className="flex items-center gap-3 p-3 rounded-2xl border border-gray-100">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+                style={{ background: "linear-gradient(135deg, #5865F2, #7983f5)" }}>
+                <span className="text-white text-sm font-extrabold">DC</span>
+              </div>
+              <div className="flex-1">
+                <p className="font-bold text-gray-700 text-sm">Discord</p>
+                <p className="text-gray-400 text-xs">mimi_333</p>
+              </div>
+            </div>
+
             <a
               href="https://github.com/2232140"
               target="_blank"
